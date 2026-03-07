@@ -1,5 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 
+if (process.env.NODE_ENV === "production") {
+  console.error("Seed script is disabled in production. Set NODE_ENV to development or test to run.");
+  process.exit(1);
+}
+
 const prisma = new PrismaClient();
 
 const orgs = [

@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
 import type { PrismaClient } from "@prisma/client";
 import type Redis from "ioredis";
+import { ZodError } from "zod";
 import { loadEnv, type EnvConfig } from "./config/env";
 import { createPrismaClient } from "./lib/prisma";
 import { createRedisClient } from "./lib/redis";
@@ -47,7 +48,24 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
 
   await app.register(authPlugin);
 
-  app.get("/health", async () => ({ ok: true }));
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.status(400).send({
+        error: "Validation Error",
+        issues: error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message
+        }))
+      });
+    }
+
+    const statusCode = error.statusCode ?? 500;
+    reply.status(statusCode).send({
+      error: error.message ?? "Internal Server Error"
+    });
+  });
+
+  app.get("/health", async () => ({ ok: true, timestamp: new Date().toISOString() }));
   await app.register(v1Routes, { prefix: "/v1" });
 
   app.addHook("onClose", async () => {

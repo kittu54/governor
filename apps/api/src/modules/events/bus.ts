@@ -9,6 +9,10 @@ export type GovernorEvent = {
 export class GovernorEventBus {
   private readonly emitter = new EventEmitter();
 
+  constructor() {
+    this.emitter.setMaxListeners(200);
+  }
+
   publish(event: GovernorEvent) {
     this.emitter.emit("event", event);
   }

@@ -79,38 +79,46 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
             </TableRow>
           </TableHeader>
           <TableBody>
-            {approvals.map((approval) => (
-              <TableRow key={approval.id}>
-                <TableCell>{new Date(approval.requestedAt).toLocaleString()}</TableCell>
-                <TableCell className="font-mono text-xs">{approval.agentId}</TableCell>
-                <TableCell className="font-mono text-xs">{approval.toolName}.{approval.toolAction}</TableCell>
-                <TableCell>${approval.costEstimateUsd.toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge variant={approval.status === "PENDING" ? "secondary" : approval.status === "APPROVED" ? "default" : "destructive"}>
-                    {approval.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => decide(approval.id, "APPROVE")}
-                      disabled={approval.status !== "PENDING" || loading === approval.id}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => decide(approval.id, "DENY")}
-                      disabled={approval.status !== "PENDING" || loading === approval.id}
-                    >
-                      Deny
-                    </Button>
-                  </div>
+            {approvals.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                  No approval requests yet. Approvals appear when tool calls exceed configured thresholds.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              approvals.map((approval) => (
+                <TableRow key={approval.id}>
+                  <TableCell>{new Date(approval.requestedAt).toLocaleString()}</TableCell>
+                  <TableCell className="font-mono text-xs">{approval.agentId}</TableCell>
+                  <TableCell className="font-mono text-xs">{approval.toolName}.{approval.toolAction}</TableCell>
+                  <TableCell>${approval.costEstimateUsd.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge variant={approval.status === "PENDING" ? "secondary" : approval.status === "APPROVED" ? "default" : "destructive"}>
+                      {approval.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => decide(approval.id, "APPROVE")}
+                        disabled={approval.status !== "PENDING" || loading === approval.id}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => decide(approval.id, "DENY")}
+                        disabled={approval.status !== "PENDING" || loading === approval.id}
+                      >
+                        Deny
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </CardContent>

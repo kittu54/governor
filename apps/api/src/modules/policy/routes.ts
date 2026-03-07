@@ -96,6 +96,46 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send(rateLimit);
   });
 
+  app.delete("/rules/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await app.prisma.policyRule.delete({ where: { id } });
+      return reply.code(204).send();
+    } catch {
+      throw app.httpErrors.notFound("Rule not found");
+    }
+  });
+
+  app.delete("/thresholds/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await app.prisma.approvalThreshold.delete({ where: { id } });
+      return reply.code(204).send();
+    } catch {
+      throw app.httpErrors.notFound("Threshold not found");
+    }
+  });
+
+  app.delete("/budgets/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await app.prisma.budgetLimit.delete({ where: { id } });
+      return reply.code(204).send();
+    } catch {
+      throw app.httpErrors.notFound("Budget not found");
+    }
+  });
+
+  app.delete("/rate-limits/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await app.prisma.rateLimitPolicy.delete({ where: { id } });
+      return reply.code(204).send();
+    } catch {
+      throw app.httpErrors.notFound("Rate limit not found");
+    }
+  });
+
   app.post("/simulate", async (request) => {
     const payload = evaluateRequestSchema.parse(request.body);
     return service.evaluate(payload, { simulate: true });

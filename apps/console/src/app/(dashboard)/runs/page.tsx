@@ -69,31 +69,39 @@ export default async function RunsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.runs.map((run) => (
-                <TableRow key={run.id}>
-                  <TableCell>{new Date(run.started_at).toLocaleString()}</TableCell>
-                  <TableCell className="font-mono text-xs">{run.id}</TableCell>
-                  <TableCell className="font-mono text-xs">{run.agent_id}</TableCell>
-                  <TableCell>
-                    <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{run.source}</p>
-                    <p className="font-mono text-xs">{run.provider ?? "unknown"}.{run.model ?? "-"}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={run.status === "ERROR" ? "destructive" : run.status === "SUCCESS" ? "default" : "secondary"}>
-                      {run.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-xs">{run.total_input_tokens}/{run.total_output_tokens}</span>
-                  </TableCell>
-                  <TableCell>${run.total_cost_usd.toFixed(4)}</TableCell>
-                  <TableCell>
-                    <Link href={`/runs/${run.id}` as Route} className="text-sm font-medium text-primary hover:underline">
-                      Open
-                    </Link>
+              {data.runs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    No runs recorded yet. Integrate the SDK to start capturing agent telemetry.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                data.runs.map((run) => (
+                  <TableRow key={run.id}>
+                    <TableCell>{new Date(run.started_at).toLocaleString()}</TableCell>
+                    <TableCell className="font-mono text-xs">{run.id}</TableCell>
+                    <TableCell className="font-mono text-xs">{run.agent_id}</TableCell>
+                    <TableCell>
+                      <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{run.source}</p>
+                      <p className="font-mono text-xs">{run.provider ?? "unknown"}.{run.model ?? "-"}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={run.status === "ERROR" ? "destructive" : run.status === "SUCCESS" ? "default" : "secondary"}>
+                        {run.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs">{run.total_input_tokens}/{run.total_output_tokens}</span>
+                    </TableCell>
+                    <TableCell>${run.total_cost_usd.toFixed(4)}</TableCell>
+                    <TableCell>
+                      <Link href={`/runs/${run.id}` as Route} className="text-sm font-medium text-primary hover:underline">
+                        Open
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

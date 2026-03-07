@@ -2,23 +2,74 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-interface PolicyStudioClientProps {
+interface PolicyRule {
+  id: string;
   orgId: string;
+  agentId?: string | null;
+  toolName: string;
+  toolAction: string;
+  effect: "ALLOW" | "DENY";
+  priority: number;
+  reason?: string | null;
 }
 
-export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
-  const [message, setMessage] = useState("Ready");
+interface Threshold {
+  id: string;
+  orgId: string;
+  agentId?: string | null;
+  toolName: string;
+  toolAction: string;
+  amountUsd: number;
+}
+
+interface Budget {
+  id: string;
+  orgId: string;
+  agentId?: string | null;
+  dailyLimitUsd: number;
+}
+
+interface RateLimit {
+  id: string;
+  orgId: string;
+  agentId?: string | null;
+  callsPerMinute: number;
+}
+
+interface PolicyStudioClientProps {
+  orgId: string;
+  initialPolicies: {
+    rules: PolicyRule[];
+    thresholds: Threshold[];
+    budgets: Budget[];
+    rate_limits: RateLimit[];
+  };
+}
+
+export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClientProps) {
+  const [message, setMessage] = useState("");
+  const [rules, setRules] = useState(initialPolicies.rules);
+  const [thresholds, setThresholds] = useState(initialPolicies.thresholds);
+  const [budgets, setBudgets] = useState(initialPolicies.budgets);
+  const [rateLimits, setRateLimits] = useState(initialPolicies.rate_limits);
   const [simResult, setSimResult] = useState<{
     decision: string;
     trace: Array<{ code: string; message: string }>;
   } | null>(null);
+
+  function showMessage(text: string) {
+    setMessage(text);
+    setTimeout(() => setMessage(""), 3000);
+  }
 
   async function createRule(formData: FormData) {
     const payload = {
@@ -37,7 +88,21 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
       body: JSON.stringify(payload)
     });
 
-    setMessage(response.ok ? "Rule created" : "Failed to create rule");
+    if (response.ok) {
+      const rule = await response.json();
+      setRules((prev) => [...prev, rule]);
+      showMessage("Rule created");
+    } else {
+      showMessage("Failed to create rule");
+    }
+  }
+
+  async function deleteRule(id: string) {
+    const response = await fetch(`${API_BASE_URL}/v1/policies/rules/${id}`, { method: "DELETE" });
+    if (response.ok || response.status === 204) {
+      setRules((prev) => prev.filter((r) => r.id !== id));
+      showMessage("Rule deleted");
+    }
   }
 
   async function createThreshold(formData: FormData) {
@@ -55,7 +120,21 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
       body: JSON.stringify(payload)
     });
 
-    setMessage(response.ok ? "Threshold created" : "Failed to create threshold");
+    if (response.ok) {
+      const threshold = await response.json();
+      setThresholds((prev) => [...prev, threshold]);
+      showMessage("Threshold created");
+    } else {
+      showMessage("Failed to create threshold");
+    }
+  }
+
+  async function deleteThreshold(id: string) {
+    const response = await fetch(`${API_BASE_URL}/v1/policies/thresholds/${id}`, { method: "DELETE" });
+    if (response.ok || response.status === 204) {
+      setThresholds((prev) => prev.filter((t) => t.id !== id));
+      showMessage("Threshold deleted");
+    }
   }
 
   async function createBudget(formData: FormData) {
@@ -71,7 +150,21 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
       body: JSON.stringify(payload)
     });
 
-    setMessage(response.ok ? "Budget created" : "Failed to create budget");
+    if (response.ok) {
+      const budget = await response.json();
+      setBudgets((prev) => [...prev, budget]);
+      showMessage("Budget created");
+    } else {
+      showMessage("Failed to create budget");
+    }
+  }
+
+  async function deleteBudget(id: string) {
+    const response = await fetch(`${API_BASE_URL}/v1/policies/budgets/${id}`, { method: "DELETE" });
+    if (response.ok || response.status === 204) {
+      setBudgets((prev) => prev.filter((b) => b.id !== id));
+      showMessage("Budget deleted");
+    }
   }
 
   async function createRateLimit(formData: FormData) {
@@ -87,7 +180,21 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
       body: JSON.stringify(payload)
     });
 
-    setMessage(response.ok ? "Rate limit created" : "Failed to create rate limit");
+    if (response.ok) {
+      const rateLimit = await response.json();
+      setRateLimits((prev) => [...prev, rateLimit]);
+      showMessage("Rate limit created");
+    } else {
+      showMessage("Failed to create rate limit");
+    }
+  }
+
+  async function deleteRateLimit(id: string) {
+    const response = await fetch(`${API_BASE_URL}/v1/policies/rate-limits/${id}`, { method: "DELETE" });
+    if (response.ok || response.status === 204) {
+      setRateLimits((prev) => prev.filter((r) => r.id !== id));
+      showMessage("Rate limit deleted");
+    }
   }
 
   async function simulate(formData: FormData) {
@@ -106,13 +213,13 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
     });
 
     if (!response.ok) {
-      setMessage("Simulation failed");
+      showMessage("Simulation failed");
       return;
     }
 
     const data = await response.json();
     setSimResult({ decision: data.decision, trace: data.trace ?? [] });
-    setMessage("Simulation complete");
+    showMessage("Simulation complete");
   }
 
   return (
@@ -120,13 +227,134 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
       <Card>
         <CardHeader>
           <CardTitle>Policy Studio</CardTitle>
-          <CardDescription>Visual policy controls for rule authoring, thresholds, budgets, and simulator.</CardDescription>
+          <CardDescription>Manage policy rules, thresholds, budgets, rate limits, and simulate evaluations.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Org: {orgId} • Status: {message}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">Org: <span className="font-mono">{orgId}</span></p>
+            {message && (
+              <Badge variant="secondary">
+                {message}
+              </Badge>
+            )}
+          </div>
         </CardContent>
       </Card>
 
+      {/* Existing Rules */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Rules ({rules.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rules.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">No rules configured. Create one below.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tool</TableHead>
+                  <TableHead>Effect</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rules.map((rule) => (
+                  <TableRow key={rule.id}>
+                    <TableCell className="font-mono text-xs">{rule.toolName}.{rule.toolAction}</TableCell>
+                    <TableCell>
+                      <Badge variant={rule.effect === "DENY" ? "destructive" : "default"}>{rule.effect}</Badge>
+                    </TableCell>
+                    <TableCell>{rule.priority}</TableCell>
+                    <TableCell className="font-mono text-xs">{rule.agentId ?? "*"}</TableCell>
+                    <TableCell className="max-w-[200px] truncate text-sm">{rule.reason ?? "-"}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" onClick={() => deleteRule(rule.id)}>Delete</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Existing Thresholds, Budgets, Rate Limits */}
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Thresholds ({thresholds.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {thresholds.length === 0 ? (
+              <p className="py-2 text-center text-sm text-muted-foreground">None configured.</p>
+            ) : (
+              <div className="space-y-2">
+                {thresholds.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                    <div>
+                      <span className="font-mono text-xs">{t.toolName}.{t.toolAction}</span>
+                      <span className="ml-2 text-muted-foreground">&gt; ${t.amountUsd}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => deleteThreshold(t.id)}>Delete</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Budgets ({budgets.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {budgets.length === 0 ? (
+              <p className="py-2 text-center text-sm text-muted-foreground">None configured.</p>
+            ) : (
+              <div className="space-y-2">
+                {budgets.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                    <div>
+                      <span className="font-mono text-xs">{b.agentId ?? "org-wide"}</span>
+                      <span className="ml-2 text-muted-foreground">${b.dailyLimitUsd}/day</span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => deleteBudget(b.id)}>Delete</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Rate Limits ({rateLimits.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {rateLimits.length === 0 ? (
+              <p className="py-2 text-center text-sm text-muted-foreground">None configured.</p>
+            ) : (
+              <div className="space-y-2">
+                {rateLimits.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                    <div>
+                      <span className="font-mono text-xs">{r.agentId ?? "org-wide"}</span>
+                      <span className="ml-2 text-muted-foreground">{r.callsPerMinute}/min</span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => deleteRateLimit(r.id)}>Delete</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Create Forms */}
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader>
@@ -218,6 +446,7 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
         </Card>
       </div>
 
+      {/* Simulator */}
       <Card>
         <CardHeader>
           <CardTitle>Policy Simulator</CardTitle>
@@ -234,7 +463,9 @@ export function PolicyStudioClient({ orgId }: PolicyStudioClientProps) {
 
           {simResult && (
             <div className="mt-4 rounded-lg border bg-secondary/40 p-4">
-              <p className="mb-2 text-sm font-medium">Decision: {simResult.decision}</p>
+              <p className="mb-2 text-sm font-medium">
+                Decision: <Badge variant={simResult.decision === "DENY" ? "destructive" : simResult.decision === "ALLOW" ? "default" : "secondary"}>{simResult.decision}</Badge>
+              </p>
               <div className="space-y-2 text-sm">
                 {simResult.trace.map((item, index) => (
                   <div key={`${item.code}-${index}`} className="rounded border bg-white p-2">

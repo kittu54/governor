@@ -1,8 +1,8 @@
 import type { PolicyRule } from "@governor/shared";
 
 function wildcardToRegExp(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\\]\\]/g, "\\$&");
-  const withWildcards = escaped.replace(/\*/g, ".*");
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\*]/g, "\\$&");
+  const withWildcards = escaped.replace(/\\\*/g, ".*");
   return new RegExp(`^${withWildcards}$`);
 }
 

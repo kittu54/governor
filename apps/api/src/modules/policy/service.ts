@@ -126,14 +126,16 @@ export class PolicyService {
         }
       },
       rate_limits: {
-        policy: agentRate ?? orgRate
-          ? {
-              id: (agentRate ?? orgRate)!.id,
-              org_id: (agentRate ?? orgRate)!.orgId,
-              agent_id: (agentRate ?? orgRate)!.agentId,
-              calls_per_minute: (agentRate ?? orgRate)!.callsPerMinute
-            }
-          : undefined,
+        policy: (() => {
+          const effectiveRate = agentRate ?? orgRate;
+          if (!effectiveRate) return undefined;
+          return {
+            id: effectiveRate.id,
+            org_id: effectiveRate.orgId,
+            agent_id: effectiveRate.agentId,
+            calls_per_minute: effectiveRate.callsPerMinute
+          };
+        })(),
         current_calls: currentCalls
       }
     };
