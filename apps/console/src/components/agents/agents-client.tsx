@@ -43,13 +43,18 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
     setError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/ingest`, {
+      const response = await fetch(`${API_BASE_URL}/v1/ingest/events`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          org_id: orgId,
-          agent_id: newAgentId.trim(),
-          agent_name: newAgentName.trim(),
+          run: {
+            run_id: `register_${newAgentId.trim()}_${Date.now()}`,
+            org_id: orgId,
+            agent_id: newAgentId.trim(),
+            agent_name: newAgentName.trim(),
+            source: "CUSTOM",
+            task_name: "agent_registration"
+          },
           events: []
         })
       });

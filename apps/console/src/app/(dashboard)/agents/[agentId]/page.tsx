@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { apiGet } from "@/lib/api";
+import { resolveOrgId } from "@/lib/org";
 import { ArrowLeft, Activity, AlertTriangle, ShieldAlert, Wrench } from "lucide-react";
 
 interface AgentMetricsResponse {
@@ -30,7 +31,9 @@ interface AgentMetricsResponse {
 export default async function AgentExplorerPage({ params }: { params: Promise<{ agentId: string }> }) {
   const { agentId } = await params;
 
-  const data = await apiGet<AgentMetricsResponse>(`/v1/metrics/agents/${agentId}`).catch(() => ({
+  const orgId = await resolveOrgId();
+
+  const data = await apiGet<AgentMetricsResponse>(`/v1/metrics/agents/${agentId}?org_id=${encodeURIComponent(orgId)}`).catch(() => ({
     agent: {
       id: agentId,
       org_id: "unknown",

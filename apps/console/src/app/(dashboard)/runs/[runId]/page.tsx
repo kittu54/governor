@@ -1,5 +1,6 @@
 import { apiGet } from "@/lib/api";
 import { RunDetailClient } from "@/components/runs/run-detail-client";
+import { resolveOrgId } from "@/lib/org";
 
 interface RunDetailResponse {
   run: {
@@ -66,7 +67,9 @@ interface RunDetailResponse {
 export default async function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
 
-  const data = await apiGet<RunDetailResponse>(`/v1/runs/${runId}`).catch(() => null);
+  const orgId = await resolveOrgId();
+
+  const data = await apiGet<RunDetailResponse>(`/v1/runs/${runId}?org_id=${encodeURIComponent(orgId)}`).catch(() => null);
 
   if (!data) {
     return (
@@ -76,5 +79,5 @@ export default async function RunDetailPage({ params }: { params: Promise<{ runI
     );
   }
 
-  return <RunDetailClient runId={runId} data={data} />;
+  return <RunDetailClient runId={runId} orgId={orgId} data={data} />;
 }

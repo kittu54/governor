@@ -13,6 +13,10 @@ export const runsRoutes: FastifyPluginAsync = async (app) => {
 
     const limit = Math.min(Math.max(Number(query.limit ?? 100), 1), 500);
 
+    if (!query.org_id) {
+      throw app.httpErrors.badRequest("org_id query parameter is required");
+    }
+
     const runs = await app.prisma.agentRun.findMany({
       where: {
         orgId: query.org_id,
@@ -53,9 +57,17 @@ export const runsRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/:runId", async (request) => {
     const params = request.params as { runId: string };
+    const query = request.query as { org_id?: string };
 
-    const run = await app.prisma.agentRun.findUnique({
-      where: { id: params.runId }
+    if (!query.org_id) {
+      throw app.httpErrors.badRequest("org_id query parameter is required");
+    }
+
+    const run = await app.prisma.agentRun.findFirst({
+      where: {
+        id: params.runId,
+        orgId: query.org_id
+      }
     });
 
     if (!run) {
@@ -63,7 +75,10 @@ export const runsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const events = await app.prisma.agentEvent.findMany({
-      where: { runId: run.id },
+      where: {
+        runId: run.id,
+        orgId: query.org_id
+      },
       orderBy: [{ timestamp: "asc" }, { sequence: "asc" }]
     });
 
@@ -142,15 +157,28 @@ export const runsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/:runId/analyze", async (request) => {
     const params = request.params as { runId: string };
+    const query = request.query as { org_id?: string };
     const payload = runAnalyzeSchema.parse(request.body);
 
-    const run = await app.prisma.agentRun.findUnique({ where: { id: params.runId } });
+    if (!query.org_id) {
+      throw app.httpErrors.badRequest("org_id query parameter is required");
+    }
+
+    const run = await app.prisma.agentRun.findFirst({
+      where: {
+        id: params.runId,
+        orgId: query.org_id
+      }
+    });
     if (!run) {
       throw app.httpErrors.notFound("Run not found");
     }
 
     const events = await app.prisma.agentEvent.findMany({
-      where: { runId: run.id },
+      where: {
+        runId: run.id,
+        orgId: query.org_id
+      },
       orderBy: [{ timestamp: "asc" }, { sequence: "asc" }]
     });
 

@@ -20,10 +20,11 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         create: {
           id: payload.run.agent_id,
           orgId: payload.run.org_id,
-          name: payload.run.agent_id
+          name: payload.run.agent_name ?? payload.run.agent_id
         },
         update: {
-          orgId: payload.run.org_id
+          orgId: payload.run.org_id,
+          ...(payload.run.agent_name ? { name: payload.run.agent_name } : {})
         }
       });
 

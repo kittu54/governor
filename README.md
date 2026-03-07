@@ -535,9 +535,13 @@ Events with duplicate `event_id` values are automatically deduplicated.
 
 #### `GET /v1/runs/:runId` — Get run with events
 
+**Query params:** `org_id` (required)
+
 Returns the full run record with all associated events, ordered by timestamp.
 
 #### `POST /v1/runs/:runId/analyze` — Heuristic run analysis
+
+**Query params:** `org_id` (required)
 
 ```json
 {
@@ -689,9 +693,9 @@ curl "http://localhost:4000/v1/metrics/overview?days=7"
 ### 2. Explore runs
 
 ```bash
-curl "http://localhost:4000/v1/runs?limit=5"
-curl "http://localhost:4000/v1/runs/run_36"
-curl -X POST "http://localhost:4000/v1/runs/run_36/analyze" \
+curl "http://localhost:4000/v1/runs?org_id=org_demo_1&limit=5"
+curl "http://localhost:4000/v1/runs/run_36?org_id=org_demo_1"
+curl -X POST "http://localhost:4000/v1/runs/run_36/analyze?org_id=org_demo_1" \
   -H "content-type: application/json" \
   -d '{"question":"What should I optimize first?"}'
 ```

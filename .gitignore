@@ -9,5 +9,6 @@ dist
 coverage
 *.log
 .DS_Store
+*.tsbuildinfo
 apps/api/prisma/dev.db
 apps/api/prisma/dev.db-journal

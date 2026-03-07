@@ -73,6 +73,7 @@ export const ingestRunSchema = z.object({
   run_id: z.string().min(1),
   org_id: z.string().min(1),
   agent_id: z.string().min(1),
+  agent_name: z.string().min(1).optional(),
   session_id: z.string().optional(),
   user_id: z.string().optional(),
   source: runtimeSourceSchema,
