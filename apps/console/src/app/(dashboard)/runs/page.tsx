@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { resolveOrgId } from "@/lib/org";
 import { apiGet } from "@/lib/api";
+import { FileSearch, Zap, AlertTriangle, DollarSign, Clock } from "lucide-react";
 
 interface RunsResponse {
   runs: Array<{
@@ -32,27 +33,85 @@ export default async function RunsPage() {
 
   const totalCost = data.runs.reduce((sum, run) => sum + run.total_cost_usd, 0);
   const errored = data.runs.filter((run) => run.status === "ERROR").length;
+  const running = data.runs.filter((run) => run.status === "RUNNING").length;
+  const totalTokens = data.runs.reduce((sum, run) => sum + run.total_input_tokens + run.total_output_tokens, 0);
+  const avgDuration = data.runs.filter(r => r.duration_ms).length > 0
+    ? data.runs.filter(r => r.duration_ms).reduce((sum, r) => sum + (r.duration_ms ?? 0), 0) / data.runs.filter(r => r.duration_ms).length
+    : 0;
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Run Explorer</CardTitle>
-          <CardDescription>Cross-provider execution telemetry across OpenAI, Claude, Gemini, LangChain, MCP, and custom agents.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-4">
-            <Metric label="Runs" value={String(data.runs.length)} />
-            <Metric label="Errored" value={String(errored)} />
-            <Metric label="Run Cost" value={`$${totalCost.toFixed(4)}`} />
-            <Metric label="Org" value={orgId} mono />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Summary Cards */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Runs</p>
+                <p className="mt-2 text-3xl font-bold text-foreground">{data.runs.length}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-2.5">
+                <FileSearch className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Active</p>
+            <p className="mt-2 text-3xl font-bold text-primary">{running}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Errors</p>
+            <p className={`mt-2 text-3xl font-bold ${errored > 0 ? "text-red-400" : "text-emerald-400"}`}>{errored}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Cost</p>
+            <p className="mt-2 text-3xl font-bold text-foreground">${totalCost.toFixed(4)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg Duration</p>
+            <p className="mt-2 text-3xl font-bold text-foreground">{avgDuration > 0 ? `${(avgDuration / 1000).toFixed(1)}s` : "-"}</p>
+          </CardContent>
+        </Card>
+      </section>
 
+      {/* Tokens Summary */}
+      <section className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Tokens Used</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{totalTokens.toLocaleString()}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Input + output tokens across all runs</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Cost per Run</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">
+              ${data.runs.length > 0 ? (totalCost / data.runs.length).toFixed(4) : "0.0000"}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">Average cost per execution</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Runs Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Runs</CardTitle>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Recent Runs</CardTitle>
+              <CardDescription>Cross-provider execution telemetry</CardDescription>
+            </div>
+            <Badge variant="secondary">{data.runs.length} runs</Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -71,29 +130,34 @@ export default async function RunsPage() {
             <TableBody>
               {data.runs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
-                    No runs recorded yet. Integrate the SDK to start capturing agent telemetry.
+                  <TableCell colSpan={8} className="py-12 text-center">
+                    <FileSearch className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+                    <p className="text-sm text-muted-foreground">No runs recorded yet. Integrate the SDK to start capturing agent telemetry.</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 data.runs.map((run) => (
                   <TableRow key={run.id}>
-                    <TableCell>{new Date(run.started_at).toLocaleString()}</TableCell>
-                    <TableCell className="font-mono text-xs">{run.id}</TableCell>
+                    <TableCell className="text-muted-foreground">{new Date(run.started_at).toLocaleString()}</TableCell>
+                    <TableCell className="font-mono text-xs">{run.id.slice(0, 12)}...</TableCell>
                     <TableCell className="font-mono text-xs">{run.agent_id}</TableCell>
                     <TableCell>
-                      <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{run.source}</p>
-                      <p className="font-mono text-xs">{run.provider ?? "unknown"}.{run.model ?? "-"}</p>
+                      <Badge variant="outline" className="text-[10px] uppercase">{run.source}</Badge>
+                      <p className="mt-0.5 font-mono text-xs text-muted-foreground">{run.model ?? "-"}</p>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={run.status === "ERROR" ? "destructive" : run.status === "SUCCESS" ? "default" : "secondary"}>
+                      <Badge variant={
+                        run.status === "ERROR" ? "destructive" :
+                        run.status === "SUCCESS" ? "success" :
+                        run.status === "RUNNING" ? "default" : "secondary"
+                      }>
                         {run.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="font-mono text-xs">{run.total_input_tokens}/{run.total_output_tokens}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{run.total_input_tokens}/{run.total_output_tokens}</span>
                     </TableCell>
-                    <TableCell>${run.total_cost_usd.toFixed(4)}</TableCell>
+                    <TableCell className="font-mono">${run.total_cost_usd.toFixed(4)}</TableCell>
                     <TableCell>
                       <Link href={`/runs/${run.id}` as Route} className="text-sm font-medium text-primary hover:underline">
                         Open
@@ -106,15 +170,6 @@ export default async function RunsPage() {
           </Table>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function Metric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-lg border bg-white/80 p-4">
-      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-lg font-semibold ${mono ? "font-mono text-xs" : ""}`}>{value}</p>
     </div>
   );
 }

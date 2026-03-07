@@ -6,19 +6,35 @@ interface DecisionPieChartProps {
   data: Array<{ decision: string; value: number }>;
 }
 
-const COLORS = ["#0a8ea3", "#ce2b43", "#f3672f"];
+const COLORS = ["#22b8cf", "#ef4444", "#f59e0b"];
 
 export function DecisionPieChart({ data }: DecisionPieChartProps) {
   return (
-    <div className="h-[320px] w-full">
+    <div className="h-[240px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <Pie data={data} innerRadius={70} outerRadius={110} dataKey="value" nameKey="decision" paddingAngle={4}>
+          <Pie
+            data={data}
+            innerRadius={65}
+            outerRadius={100}
+            dataKey="value"
+            nameKey="decision"
+            paddingAngle={3}
+            strokeWidth={0}
+          >
             {data.map((entry, index) => (
               <Cell key={entry.decision} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: "hsl(220 18% 13%)",
+              border: "1px solid hsl(220 14% 20%)",
+              borderRadius: "8px",
+              color: "hsl(210 20% 92%)",
+              fontSize: 13
+            }}
+          />
         </PieChart>
       </ResponsiveContainer>
     </div>

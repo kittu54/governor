@@ -1,9 +1,8 @@
-import Link from "next/link";
-import type { Route } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiGet } from "@/lib/api";
 import { resolveOrgId } from "@/lib/org";
+import { AgentsClient } from "@/components/agents/agents-client";
+import { Bot, Activity, AlertTriangle } from "lucide-react";
 
 interface AgentsResponse {
   agents: Array<{
@@ -18,44 +17,61 @@ export default async function AgentsPage() {
   const orgId = await resolveOrgId();
   const data = await apiGet<AgentsResponse>(`/v1/metrics/agents?org_id=${orgId}`).catch(() => ({ agents: [] }));
 
+  const totalAgents = data.agents.length;
+  const recentAgents = data.agents.filter(a => {
+    const created = new Date(a.createdAt);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return created > weekAgo;
+  }).length;
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Agents</CardTitle>
-          <CardDescription>All registered agents for {orgId}.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {data.agents.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No agents found. Ingest events to see agents here.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Agent ID</TableHead>
-                  <TableHead>Organization</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.agents.map((agent) => (
-                  <TableRow key={agent.id}>
-                    <TableCell className="font-medium">{agent.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{agent.id}</TableCell>
-                    <TableCell className="font-mono text-xs">{agent.orgId}</TableCell>
-                    <TableCell>
-                      <Link href={`/agents/${agent.id}` as Route} className="text-sm font-medium text-primary hover:underline">
-                        Details
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Summary */}
+      <section className="grid gap-4 sm:grid-cols-3">
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Agents</p>
+                <p className="mt-2 text-3xl font-bold text-foreground">{totalAgents}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-2.5">
+                <Bot className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">New This Week</p>
+                <p className="mt-2 text-3xl font-bold text-primary">{recentAgents}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-2.5">
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Organization</p>
+                <p className="mt-2 text-lg font-bold font-mono text-foreground truncate">{orgId}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-2.5">
+                <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Agents Table with Add Agent */}
+      <AgentsClient initialAgents={data.agents} orgId={orgId} />
     </div>
   );
 }

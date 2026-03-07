@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Activity, UserRoundCog, Building2, Bot, Scale, FileSearch, Menu, X } from "lucide-react";
+import { ShieldCheck, Activity, UserRoundCog, Building2, Bot, Scale, FileSearch, Menu, X, User, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -17,17 +17,29 @@ const navItems = [
   { href: "/agents", label: "Agents", icon: Bot }
 ];
 
+const bottomNavItems = [
+  { href: "/profile", label: "Profile", icon: User },
+  { href: "/settings", label: "Settings", icon: Settings }
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navContent = (
-    <>
+    <div className="flex h-full flex-col">
       <div className="mb-8 px-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Governor</p>
-        <h1 className="mt-2 text-2xl font-semibold">Control Tower</h1>
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Governor</p>
+            <h1 className="text-lg font-semibold text-foreground">Control Tower</h1>
+          </div>
+        </div>
       </div>
-      <nav className="space-y-1">
+      <nav className="flex-1 space-y-0.5">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
@@ -37,8 +49,10 @@ export function Sidebar() {
               href={item.href as Route}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                active ? "bg-primary text-white" : "text-foreground hover:bg-secondary"
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
+                active
+                  ? "bg-primary/15 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <Icon className="h-4 w-4" />
@@ -47,14 +61,36 @@ export function Sidebar() {
           );
         })}
       </nav>
-    </>
+      <div className="border-t border-border/60 pt-3 space-y-0.5">
+        {bottomNavItems.map((item) => {
+          const active = pathname === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href as Route}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
+                active
+                  ? "bg-primary/15 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
   );
 
   return (
     <>
       {/* Mobile toggle */}
       <button
-        className="fixed left-4 top-4 z-50 rounded-md border bg-white p-2 shadow-sm lg:hidden"
+        className="fixed left-4 top-4 z-50 rounded-lg border border-border bg-card p-2 shadow-lg lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label={mobileOpen ? "Close menu" : "Open menu"}
       >
@@ -63,13 +99,13 @@ export function Sidebar() {
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/25 lg:hidden" onClick={() => setMobileOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* Mobile sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[260px] border-r bg-white px-4 py-6 transition-transform lg:hidden",
+          "fixed inset-y-0 left-0 z-40 w-[260px] border-r border-border/60 bg-card px-4 py-6 transition-transform lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -77,7 +113,7 @@ export function Sidebar() {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 border-r bg-white/70 px-4 py-6 backdrop-blur lg:block">
+      <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 border-r border-border/60 bg-card px-4 py-6 lg:block">
         {navContent}
       </aside>
     </>

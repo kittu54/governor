@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Scale, Trash2 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -226,17 +227,37 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Policy Studio</CardTitle>
-          <CardDescription>Manage policy rules, thresholds, budgets, rate limits, and simulate evaluations.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle>Policy Studio</CardTitle>
+                <CardDescription>Manage policy rules, thresholds, budgets, rate limits, and simulate evaluations.</CardDescription>
+              </div>
+            </div>
+            {message && (
+              <Badge variant="success">{message}</Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
-            <p className="text-sm text-muted-foreground">Org: <span className="font-mono">{orgId}</span></p>
-            {message && (
-              <Badge variant="secondary">
-                {message}
-              </Badge>
-            )}
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Rules</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{rules.length}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Thresholds</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{thresholds.length}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Budgets</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{budgets.length}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Rate Limits</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{rateLimits.length}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -266,13 +287,15 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
                   <TableRow key={rule.id}>
                     <TableCell className="font-mono text-xs">{rule.toolName}.{rule.toolAction}</TableCell>
                     <TableCell>
-                      <Badge variant={rule.effect === "DENY" ? "destructive" : "default"}>{rule.effect}</Badge>
+                      <Badge variant={rule.effect === "DENY" ? "destructive" : "success"}>{rule.effect}</Badge>
                     </TableCell>
                     <TableCell>{rule.priority}</TableCell>
-                    <TableCell className="font-mono text-xs">{rule.agentId ?? "*"}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-sm">{rule.reason ?? "-"}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{rule.agentId ?? "*"}</TableCell>
+                    <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">{rule.reason ?? "-"}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => deleteRule(rule.id)}>Delete</Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteRule(rule.id)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-400" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -294,12 +317,14 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
             ) : (
               <div className="space-y-2">
                 {thresholds.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                  <div key={t.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 text-sm">
                     <div>
                       <span className="font-mono text-xs">{t.toolName}.{t.toolAction}</span>
                       <span className="ml-2 text-muted-foreground">&gt; ${t.amountUsd}</span>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => deleteThreshold(t.id)}>Delete</Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteThreshold(t.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -317,12 +342,14 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
             ) : (
               <div className="space-y-2">
                 {budgets.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                  <div key={b.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 text-sm">
                     <div>
                       <span className="font-mono text-xs">{b.agentId ?? "org-wide"}</span>
                       <span className="ml-2 text-muted-foreground">${b.dailyLimitUsd}/day</span>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => deleteBudget(b.id)}>Delete</Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteBudget(b.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -340,12 +367,14 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
             ) : (
               <div className="space-y-2">
                 {rateLimits.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                  <div key={r.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 text-sm">
                     <div>
                       <span className="font-mono text-xs">{r.agentId ?? "org-wide"}</span>
                       <span className="ml-2 text-muted-foreground">{r.callsPerMinute}/min</span>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => deleteRateLimit(r.id)}>Delete</Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteRateLimit(r.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -372,7 +401,7 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
                 <Input name="tool_action" defaultValue="refund" required />
               </Field>
               <Field label="Effect">
-                <select name="effect" className="h-10 w-full rounded-md border bg-white px-3 text-sm" defaultValue="DENY">
+                <select name="effect" className="h-10 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground" defaultValue="DENY">
                   <option value="ALLOW">ALLOW</option>
                   <option value="DENY">DENY</option>
                 </select>
@@ -462,15 +491,18 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
           </form>
 
           {simResult && (
-            <div className="mt-4 rounded-lg border bg-secondary/40 p-4">
-              <p className="mb-2 text-sm font-medium">
-                Decision: <Badge variant={simResult.decision === "DENY" ? "destructive" : simResult.decision === "ALLOW" ? "default" : "secondary"}>{simResult.decision}</Badge>
+            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
+              <p className="mb-3 text-sm font-medium">
+                Decision:{" "}
+                <Badge variant={simResult.decision === "DENY" ? "destructive" : simResult.decision === "ALLOW" ? "success" : "warning"}>
+                  {simResult.decision}
+                </Badge>
               </p>
               <div className="space-y-2 text-sm">
                 {simResult.trace.map((item, index) => (
-                  <div key={`${item.code}-${index}`} className="rounded border bg-white p-2">
-                    <p className="font-medium">{item.code}</p>
-                    <p>{item.message}</p>
+                  <div key={`${item.code}-${index}`} className="rounded-lg border border-border bg-muted/50 p-3">
+                    <p className="font-mono text-xs font-medium text-primary">{item.code}</p>
+                    <p className="mt-1 text-muted-foreground">{item.message}</p>
                   </div>
                 ))}
               </div>

@@ -1,7 +1,10 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import type { Route } from "next";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { apiGet } from "@/lib/api";
+import { ArrowLeft, Activity, AlertTriangle, ShieldAlert, Wrench } from "lucide-react";
 
 interface AgentMetricsResponse {
   agent: {
@@ -40,50 +43,98 @@ export default async function AgentExplorerPage({ params }: { params: Promise<{ 
     recent_events: []
   }));
 
+  const successEvents = data.recent_events.filter(e => e.status === "SUCCESS").length;
+  const errorEvents = data.recent_events.filter(e => e.status === "ERROR").length;
+  const avgLatency = data.recent_events.filter(e => e.latencyMs).reduce((sum, e) => sum + (e.latencyMs ?? 0), 0) / (data.recent_events.filter(e => e.latencyMs).length || 1);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Link href={"/agents" as Route} className="rounded-lg border border-border bg-muted p-2 text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{data.agent.name}</h1>
+          <p className="text-sm font-mono text-muted-foreground">{data.agent.id}</p>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tool Calls</p>
+            <p className="mt-1 text-2xl font-bold text-primary">{data.agent.tool_calls.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Error Rate</p>
+            <p className={`mt-1 text-2xl font-bold ${data.agent.error_rate > 5 ? "text-red-400" : "text-emerald-400"}`}>
+              {data.agent.error_rate.toFixed(1)}%
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Blocked</p>
+            <p className="mt-1 text-2xl font-bold text-amber-400">{data.agent.blocked_actions}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Success / Error</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">
+              <span className="text-emerald-400">{successEvents}</span>
+              <span className="text-muted-foreground mx-1">/</span>
+              <span className="text-red-400">{errorEvents}</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg Latency</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{avgLatency.toFixed(0)}ms</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Tools Used */}
       <Card>
         <CardHeader>
-          <CardTitle>Agent Explorer: {data.agent.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            <Metric label="Agent ID" value={data.agent.id} mono />
-            <Metric label="Org" value={data.agent.org_id} mono />
-            <Metric label="Tool Calls" value={String(data.agent.tool_calls)} />
-            <Metric label="Error Rate" value={`${data.agent.error_rate.toFixed(2)}%`} />
-            <Metric label="Blocked Actions" value={String(data.agent.blocked_actions)} />
+          <div className="flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+            <CardTitle>Tools Used</CardTitle>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Tools Used</CardTitle>
+          <CardDescription>{data.agent.tools_used.length} unique tools</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tool</TableHead>
-                <TableHead>Invocations</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          {data.agent.tools_used.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No tool usage data available</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {data.agent.tools_used.map((tool) => (
-                <TableRow key={tool.tool}>
-                  <TableCell className="font-mono text-xs">{tool.tool}</TableCell>
-                  <TableCell>{tool.count}</TableCell>
-                </TableRow>
+                <div key={tool.tool} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+                  <span className="font-mono text-sm text-foreground">{tool.tool}</span>
+                  <Badge variant="secondary">{tool.count}</Badge>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Recent Events */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Events</CardTitle>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Recent Events</CardTitle>
+              <CardDescription>Latest tool call events for this agent</CardDescription>
+            </div>
+            <Badge variant="secondary">{data.recent_events.length} events</Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -99,30 +150,25 @@ export default async function AgentExplorerPage({ params }: { params: Promise<{ 
             <TableBody>
               {data.recent_events.map((event) => (
                 <TableRow key={event.id}>
-                  <TableCell>{new Date(event.timestamp).toLocaleString()}</TableCell>
+                  <TableCell className="text-muted-foreground">{new Date(event.timestamp).toLocaleString()}</TableCell>
                   <TableCell className="font-mono text-xs">{event.toolName}.{event.toolAction}</TableCell>
                   <TableCell>
-                    <Badge variant={event.decision === "DENY" ? "destructive" : event.decision === "ALLOW" ? "default" : "secondary"}>
+                    <Badge variant={event.decision === "DENY" ? "destructive" : event.decision === "ALLOW" ? "success" : "warning"}>
                       {event.decision}
                     </Badge>
                   </TableCell>
-                  <TableCell>{event.status}</TableCell>
-                  <TableCell>{event.latencyMs ?? "-"} ms</TableCell>
+                  <TableCell>
+                    <Badge variant={event.status === "ERROR" ? "destructive" : event.status === "SUCCESS" ? "success" : "secondary"}>
+                      {event.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm text-muted-foreground">{event.latencyMs != null ? `${event.latencyMs}ms` : "-"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function Metric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-lg border bg-white/80 p-4">
-      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-lg font-semibold ${mono ? "font-mono text-sm" : ""}`}>{value}</p>
     </div>
   );
 }

@@ -2,13 +2,17 @@
 
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { getClerkModeLabel, isClerkEnabled } from "@/lib/clerk";
+import { Badge } from "@/components/ui/badge";
 
 export function Topbar() {
   return (
-    <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+    <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-card px-5 py-3.5 shadow-lg shadow-black/5">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">AI Governance</p>
-        <h2 className="text-xl font-semibold">Operational Command Deck</h2>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">AI Governance</p>
+          <Badge variant="success" className="text-[10px]">Live</Badge>
+        </div>
+        <h2 className="text-xl font-semibold text-foreground">Operational Command Deck</h2>
       </div>
       <div className="flex items-center gap-3">
         {isClerkEnabled ? (
@@ -16,7 +20,7 @@ export function Topbar() {
             <OrganizationSwitcher
               appearance={{
                 elements: {
-                  organizationSwitcherTrigger: "rounded-md border px-3 py-2"
+                  organizationSwitcherTrigger: "rounded-lg border border-border bg-muted px-3 py-2 text-foreground"
                 }
               }}
               hidePersonal
@@ -24,7 +28,7 @@ export function Topbar() {
             <UserButton afterSignOutUrl="/sign-in" />
           </>
         ) : (
-          <div className="rounded-md border bg-secondary px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em]">
+          <div className="rounded-lg border border-border bg-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {getClerkModeLabel()}
           </div>
         )}

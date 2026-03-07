@@ -117,28 +117,32 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Run Detail: {data.run.id}</CardTitle>
-          <CardDescription>
-            {data.run.source} • {data.run.provider ?? "unknown"} • {data.run.model ?? "unknown-model"}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Run Detail</CardTitle>
+              <CardDescription>
+                {data.run.source} / {data.run.provider ?? "unknown"} / {data.run.model ?? "unknown-model"}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={data.run.status === "ERROR" ? "destructive" : data.run.status === "SUCCESS" ? "success" : "default"}>
+                {data.run.status}
+              </Badge>
+              <select
+                className="h-9 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground"
+                value={mode}
+                onChange={(event) => setMode(event.target.value as ExperienceMode)}
+              >
+                <option value="EASY">Easy View</option>
+                <option value="PRO">Pro View</option>
+                <option value="HARDCORE">Hardcore Dev View</option>
+              </select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex flex-wrap gap-3">
-            <Badge variant={data.run.status === "ERROR" ? "destructive" : data.run.status === "SUCCESS" ? "default" : "secondary"}>
-              {data.run.status}
-            </Badge>
-            <select
-              className="h-9 rounded-md border bg-white px-3 text-sm"
-              value={mode}
-              onChange={(event) => setMode(event.target.value as ExperienceMode)}
-            >
-              <option value="EASY">Easy View</option>
-              <option value="PRO">Pro View</option>
-              <option value="HARDCORE">Hardcore Dev View</option>
-            </select>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <p className="mb-4 font-mono text-xs text-muted-foreground">{data.run.id}</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Duration" value={`${data.run.duration_ms ?? 0} ms`} />
             <Metric label="Cost" value={`$${data.run.total_cost_usd.toFixed(4)}`} />
             <Metric label="Tokens" value={`${data.run.total_input_tokens}/${data.run.total_output_tokens}`} mono />
@@ -151,14 +155,14 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
 
           {mode !== "EASY" && (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <Card className="border-dashed">
+              <Card className="border-dashed border-border/60">
                 <CardHeader>
                   <CardTitle className="text-base">Insights</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
                     {data.analysis.insights.map((insight, index) => (
-                      <li key={index} className="rounded border bg-secondary/30 p-2">
+                      <li key={index} className="rounded-lg border border-border bg-muted/30 p-3 text-muted-foreground">
                         {insight}
                       </li>
                     ))}
@@ -166,14 +170,14 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
                 </CardContent>
               </Card>
 
-              <Card className="border-dashed">
+              <Card className="border-dashed border-border/60">
                 <CardHeader>
                   <CardTitle className="text-base">Recommendations</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
                     {data.analysis.recommendations.map((recommendation, index) => (
-                      <li key={index} className="rounded border bg-secondary/30 p-2">
+                      <li key={index} className="rounded-lg border border-border bg-muted/30 p-3 text-muted-foreground">
                         {recommendation}
                       </li>
                     ))}
@@ -203,8 +207,13 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Event Timeline</CardTitle>
-          <CardDescription>Full event-level trace with parameters, costs, and outputs.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Event Timeline</CardTitle>
+              <CardDescription>Full event-level trace with parameters, costs, and outputs.</CardDescription>
+            </div>
+            <Badge variant="secondary">{data.events.length} events</Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -222,13 +231,19 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
             <TableBody>
               {data.events.map((event) => (
                 <TableRow key={event.id}>
-                  <TableCell>{new Date(event.timestamp).toLocaleString()}</TableCell>
-                  <TableCell>{event.type}</TableCell>
+                  <TableCell className="text-muted-foreground">{new Date(event.timestamp).toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">{event.type}</Badge>
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{event.step_name ?? `${event.tool_name ?? "-"}.${event.tool_action ?? "-"}`}</TableCell>
-                  <TableCell>{event.status ?? "-"}</TableCell>
-                  <TableCell className="font-mono text-xs">{event.input_tokens ?? 0}/{event.output_tokens ?? 0}</TableCell>
-                  <TableCell>${event.cost_usd.toFixed(4)}</TableCell>
-                  <TableCell>{event.latency_ms ?? "-"} ms</TableCell>
+                  <TableCell>
+                    <Badge variant={event.status === "ERROR" ? "destructive" : event.status === "SUCCESS" ? "success" : "secondary"}>
+                      {event.status ?? "-"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{event.input_tokens ?? 0}/{event.output_tokens ?? 0}</TableCell>
+                  <TableCell className="font-mono">${event.cost_usd.toFixed(4)}</TableCell>
+                  <TableCell className="font-mono text-muted-foreground">{event.latency_ms != null ? `${event.latency_ms}ms` : "-"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -237,9 +252,9 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
           {mode === "HARDCORE" && (
             <div className="mt-4 space-y-2">
               {data.events.slice(0, 20).map((event) => (
-                <details key={`json-${event.id}`} className="rounded border bg-secondary/20 p-3">
-                  <summary className="cursor-pointer text-xs font-semibold">{event.type} • raw payload</summary>
-                  <pre className="mt-2 overflow-auto text-xs">{JSON.stringify(event, null, 2)}</pre>
+                <details key={`json-${event.id}`} className="rounded-lg border border-border bg-muted/30 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-foreground">{event.type} - raw payload</summary>
+                  <pre className="mt-2 overflow-auto text-xs text-muted-foreground">{JSON.stringify(event, null, 2)}</pre>
                 </details>
               ))}
             </div>
@@ -252,9 +267,9 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
 
 function Metric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border bg-white/80 p-4">
-      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-lg font-semibold ${mono ? "font-mono text-xs" : ""}`}>{value}</p>
+    <div className="rounded-lg border border-border bg-muted/30 p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-lg font-semibold text-foreground ${mono ? "font-mono text-sm" : ""}`}>{value}</p>
     </div>
   );
 }
