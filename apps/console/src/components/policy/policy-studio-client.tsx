@@ -492,12 +492,12 @@ export function PolicyStudioClient({ orgId, initialPolicies }: PolicyStudioClien
 
           {simResult && (
             <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
-              <p className="mb-3 text-sm font-medium">
+              <div className="mb-3 text-sm font-medium">
                 Decision:{" "}
                 <Badge variant={simResult.decision === "DENY" ? "destructive" : simResult.decision === "ALLOW" ? "success" : "warning"}>
                   {simResult.decision}
                 </Badge>
-              </p>
+              </div>
               <div className="space-y-2 text-sm">
                 {simResult.trace.map((item, index) => (
                   <div key={`${item.code}-${index}`} className="rounded-lg border border-border bg-muted/50 p-3">
