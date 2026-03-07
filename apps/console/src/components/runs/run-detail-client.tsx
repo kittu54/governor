@@ -1,0 +1,260 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+
+type ExperienceMode = "EASY" | "PRO" | "HARDCORE";
+
+interface RunDetailClientProps {
+  runId: string;
+  data: {
+    run: {
+      id: string;
+      org_id: string;
+      agent_id: string;
+      source: string;
+      provider?: string | null;
+      model?: string | null;
+      framework?: string | null;
+      runtime?: string | null;
+      task_name?: string | null;
+      status: "RUNNING" | "SUCCESS" | "ERROR" | "CANCELED";
+      started_at: string;
+      ended_at?: string | null;
+      duration_ms?: number | null;
+      total_input_tokens: number;
+      total_output_tokens: number;
+      total_cost_usd: number;
+      total_tool_calls: number;
+      error_message?: string | null;
+      risk_score?: number | null;
+      tags?: string[];
+      metadata?: Record<string, unknown> | null;
+    };
+    summary: {
+      event_count: number;
+      event_type_breakdown: Record<string, number>;
+      avg_event_latency_ms: number;
+      top_cost_events: Array<{
+        type: string;
+        step_name?: string | null;
+        tool_name?: string | null;
+        cost_usd: number;
+        timestamp: string;
+      }>;
+    };
+    analysis: {
+      insights: string[];
+      recommendations: string[];
+    };
+    events: Array<{
+      id: string;
+      timestamp: string;
+      type: string;
+      provider?: string | null;
+      model?: string | null;
+      step_name?: string | null;
+      tool_name?: string | null;
+      tool_action?: string | null;
+      input_tokens?: number | null;
+      output_tokens?: number | null;
+      cost_usd: number;
+      latency_ms?: number | null;
+      status?: string | null;
+      error_message?: string | null;
+      input_payload?: Record<string, unknown> | null;
+      output_payload?: Record<string, unknown> | null;
+      parameters?: Record<string, unknown> | null;
+      metadata?: Record<string, unknown> | null;
+    }>;
+  };
+}
+
+export function RunDetailClient({ runId, data }: RunDetailClientProps) {
+  const [mode, setMode] = useState<ExperienceMode>("PRO");
+  const [question, setQuestion] = useState("Why did this run cost what it cost?");
+  const [answer, setAnswer] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const tokenRatio = useMemo(() => {
+    if (data.run.total_input_tokens === 0) {
+      return 0;
+    }
+    return Number((data.run.total_output_tokens / data.run.total_input_tokens).toFixed(2));
+  }, [data.run.total_input_tokens, data.run.total_output_tokens]);
+
+  async function ask() {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/v1/runs/${runId}/analyze`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ question })
+      });
+
+      if (!response.ok) {
+        setAnswer("Analysis endpoint failed. Try again.");
+        return;
+      }
+
+      const payload = await response.json();
+      setAnswer(payload.answer);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Run Detail: {data.run.id}</CardTitle>
+          <CardDescription>
+            {data.run.source} • {data.run.provider ?? "unknown"} • {data.run.model ?? "unknown-model"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex flex-wrap gap-3">
+            <Badge variant={data.run.status === "ERROR" ? "destructive" : data.run.status === "SUCCESS" ? "default" : "secondary"}>
+              {data.run.status}
+            </Badge>
+            <select
+              className="h-9 rounded-md border bg-white px-3 text-sm"
+              value={mode}
+              onChange={(event) => setMode(event.target.value as ExperienceMode)}
+            >
+              <option value="EASY">Easy View</option>
+              <option value="PRO">Pro View</option>
+              <option value="HARDCORE">Hardcore Dev View</option>
+            </select>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Metric label="Duration" value={`${data.run.duration_ms ?? 0} ms`} />
+            <Metric label="Cost" value={`$${data.run.total_cost_usd.toFixed(4)}`} />
+            <Metric label="Tokens" value={`${data.run.total_input_tokens}/${data.run.total_output_tokens}`} mono />
+            <Metric label="Tool Calls" value={String(data.run.total_tool_calls)} />
+            <Metric label="Avg Event Latency" value={`${data.summary.avg_event_latency_ms} ms`} />
+            <Metric label="Token Ratio" value={String(tokenRatio)} />
+            <Metric label="Risk Score" value={(data.run.risk_score ?? 0).toFixed(3)} />
+            <Metric label="Events" value={String(data.summary.event_count)} />
+          </div>
+
+          {mode !== "EASY" && (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base">Insights</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    {data.analysis.insights.map((insight, index) => (
+                      <li key={index} className="rounded border bg-secondary/30 p-2">
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base">Recommendations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    {data.analysis.recommendations.map((recommendation, index) => (
+                      <li key={index} className="rounded border bg-secondary/30 p-2">
+                        {recommendation}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Analyst Chat</CardTitle>
+          <CardDescription>Ask Governor for a scoped analysis/opinion on this run.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input value={question} onChange={(event) => setQuestion(event.target.value)} />
+            <Button onClick={ask} disabled={loading}>
+              {loading ? "Thinking..." : "Analyze"}
+            </Button>
+          </div>
+          {answer && <Textarea className="mt-3 min-h-[110px]" value={answer} readOnly />}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Event Timeline</CardTitle>
+          <CardDescription>Full event-level trace with parameters, costs, and outputs.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Step / Tool</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Tokens</TableHead>
+                <TableHead>Cost</TableHead>
+                <TableHead>Latency</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.events.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell>{new Date(event.timestamp).toLocaleString()}</TableCell>
+                  <TableCell>{event.type}</TableCell>
+                  <TableCell className="font-mono text-xs">{event.step_name ?? `${event.tool_name ?? "-"}.${event.tool_action ?? "-"}`}</TableCell>
+                  <TableCell>{event.status ?? "-"}</TableCell>
+                  <TableCell className="font-mono text-xs">{event.input_tokens ?? 0}/{event.output_tokens ?? 0}</TableCell>
+                  <TableCell>${event.cost_usd.toFixed(4)}</TableCell>
+                  <TableCell>{event.latency_ms ?? "-"} ms</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {mode === "HARDCORE" && (
+            <div className="mt-4 space-y-2">
+              {data.events.slice(0, 20).map((event) => (
+                <details key={`json-${event.id}`} className="rounded border bg-secondary/20 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold">{event.type} • raw payload</summary>
+                  <pre className="mt-2 overflow-auto text-xs">{JSON.stringify(event, null, 2)}</pre>
+                </details>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Metric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border bg-white/80 p-4">
+      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-lg font-semibold ${mono ? "font-mono text-xs" : ""}`}>{value}</p>
+    </div>
+  );
+}

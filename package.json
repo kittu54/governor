@@ -1,0 +1,20 @@
+{
+  "name": "governor-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev": "make dev",
+    "build": "corepack pnpm -r build",
+    "test": "corepack pnpm -r test",
+    "lint": "corepack pnpm -r lint",
+    "format": "echo 'No formatter configured in workspace'",
+    "db:generate": "corepack pnpm --filter @governor/api prisma:generate",
+    "db:migrate": "corepack pnpm --filter @governor/api prisma:migrate",
+    "db:seed": "corepack pnpm --filter @governor/api prisma:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

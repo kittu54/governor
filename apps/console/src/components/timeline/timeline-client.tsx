@@ -1,0 +1,176 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+
+interface AuditEvent {
+  id: string;
+  timestamp: string;
+  orgId: string;
+  agentId: string;
+  toolName: string;
+  toolAction: string;
+  decision: "ALLOW" | "DENY" | "REQUIRE_APPROVAL";
+  status: "PENDING" | "SUCCESS" | "ERROR" | "DENIED" | "REQUIRES_APPROVAL";
+  costEstimateUsd: number;
+  latencyMs?: number | null;
+  policyTrace?: Array<{ code: string; message: string }>;
+}
+
+interface TimelineClientProps {
+  orgId: string;
+  initialEvents: AuditEvent[];
+}
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+
+function decisionVariant(decision: AuditEvent["decision"]) {
+  if (decision === "ALLOW") return "default";
+  if (decision === "DENY") return "destructive";
+  return "secondary";
+}
+
+export function TimelineClient({ orgId, initialEvents }: TimelineClientProps) {
+  const [events, setEvents] = useState(initialEvents);
+  const [selected, setSelected] = useState<AuditEvent | null>(null);
+  const [agentFilter, setAgentFilter] = useState("");
+  const [toolFilter, setToolFilter] = useState("");
+
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ org_id: orgId, limit: "100" });
+    if (agentFilter) params.set("agent_id", agentFilter);
+    if (toolFilter) params.set("tool_name", toolFilter);
+    return params.toString();
+  }, [agentFilter, orgId, toolFilter]);
+
+  useEffect(() => {
+    async function refresh() {
+      const res = await fetch(`${API_BASE_URL}/v1/audit/events?${query}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEvents(data.events ?? []);
+    }
+
+    refresh().catch(() => null);
+  }, [query]);
+
+  useEffect(() => {
+    const source = new EventSource(`${API_BASE_URL}/v1/events/stream?org_id=${orgId}`);
+
+    source.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.type === "audit.created" || parsed.type === "audit.updated") {
+          fetch(`${API_BASE_URL}/v1/audit/events?${query}`, { cache: "no-store" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (data?.events) setEvents(data.events);
+            })
+            .catch(() => null);
+        }
+      } catch {
+        // no-op
+      }
+    };
+
+    return () => {
+      source.close();
+    };
+  }, [orgId, query]);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Live Agent Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 grid gap-3 md:grid-cols-2">
+            <Input placeholder="Filter by agent_id" value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} />
+            <Input placeholder="Filter by tool_name" value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} />
+          </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Agent</TableHead>
+                <TableHead>Tool</TableHead>
+                <TableHead>Decision</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Cost</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell>{new Date(event.timestamp).toLocaleString()}</TableCell>
+                  <TableCell className="font-mono text-xs">{event.agentId}</TableCell>
+                  <TableCell className="font-mono text-xs">{event.toolName}.{event.toolAction}</TableCell>
+                  <TableCell>
+                    <Badge variant={decisionVariant(event.decision)}>{event.decision}</Badge>
+                  </TableCell>
+                  <TableCell>{event.status}</TableCell>
+                  <TableCell>${event.costEstimateUsd.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => setSelected(event)}>
+                      Trace
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25" onClick={() => setSelected(null)}>
+          <div
+            className="h-full w-full max-w-xl overflow-y-auto border-l bg-white p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Decision Trace</h3>
+              <Button variant="ghost" onClick={() => setSelected(null)}>
+                Close
+              </Button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <p>
+                <strong>Event:</strong> {selected.id}
+              </p>
+              <p>
+                <strong>Tool:</strong> {selected.toolName}.{selected.toolAction}
+              </p>
+              <p>
+                <strong>Decision:</strong> {selected.decision}
+              </p>
+              <p>
+                <strong>Status:</strong> {selected.status}
+              </p>
+              <div>
+                <strong>Trace:</strong>
+                <div className="mt-2 space-y-2">
+                  {(selected.policyTrace ?? []).map((item, index) => (
+                    <div key={`${item.code}-${index}`} className="rounded border bg-secondary/50 p-2">
+                      <p className="font-medium">{item.code}</p>
+                      <p>{item.message}</p>
+                    </div>
+                  ))}
+                  {(selected.policyTrace ?? []).length === 0 && <p className="text-muted-foreground">No trace available in this event.</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

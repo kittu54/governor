@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 44 36% 96%;
+  --foreground: 196 38% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 196 38% 12%;
+  --primary: 194 78% 33%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 30 90% 92%;
+  --secondary-foreground: 22 30% 20%;
+  --muted: 46 35% 91%;
+  --muted-foreground: 190 20% 36%;
+  --accent: 12 83% 56%;
+  --accent-foreground: 0 0% 100%;
+  --border: 35 28% 84%;
+  --input: 35 28% 84%;
+  --ring: 194 78% 33%;
+  --radius: 0.9rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: "Avenir Next", "Segoe UI Variable", "IBM Plex Sans", "Helvetica Neue", sans-serif;
+  background-image:
+    radial-gradient(circle at 8% 18%, rgba(19, 160, 183, 0.18), transparent 28%),
+    radial-gradient(circle at 92% 12%, rgba(246, 116, 53, 0.18), transparent 25%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.75), rgba(255, 250, 241, 0.95));
+  min-height: 100vh;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+}
+
+.grid-glow {
+  background-image:
+    linear-gradient(rgba(19, 160, 183, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(19, 160, 183, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+}

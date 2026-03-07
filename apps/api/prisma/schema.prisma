@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Decision {
+  ALLOW
+  DENY
+  REQUIRE_APPROVAL
+}
+
+enum AuditStatus {
+  PENDING
+  SUCCESS
+  ERROR
+  DENIED
+  REQUIRES_APPROVAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  ERROR
+  CANCELED
+}
+
+enum EventSource {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  LANGCHAIN
+  MCP
+  CUSTOM
+}
+
+enum AgentEventType {
+  RUN_STARTED
+  RUN_COMPLETED
+  RUN_FAILED
+  STEP
+  MODEL_CALL
+  MODEL_RESULT
+  TOOL_CALL
+  TOOL_RESULT
+  APPROVAL_REQUESTED
+}
+
+model Organization {
+  id               String              @id
+  name             String
+  createdAt        DateTime            @default(now())
+  agents           Agent[]
+  rules            PolicyRule[]
+  thresholds       ApprovalThreshold[]
+  budgets          BudgetLimit[]
+  rateLimits       RateLimitPolicy[]
+  audits           AuditEvent[]
+  approvalRequests ApprovalRequest[]
+  runs             AgentRun[]
+  agentEvents      AgentEvent[]
+}
+
+model Agent {
+  id               String              @id
+  orgId            String
+  name             String
+  createdAt        DateTime            @default(now())
+  organization     Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  audits           AuditEvent[]
+  approvalRequests ApprovalRequest[]
+  runs             AgentRun[]
+  agentEvents      AgentEvent[]
+
+  @@index([orgId])
+}
+
+model PolicyRule {
+  id         String       @id @default(cuid())
+  orgId      String
+  agentId    String?
+  toolName   String
+  toolAction String
+  effect     PolicyEffect
+  priority   Int          @default(100)
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, agentId])
+}
+
+enum PolicyEffect {
+  ALLOW
+  DENY
+}
+
+model ApprovalThreshold {
+  id         String   @id @default(cuid())
+  orgId      String
+  agentId    String?
+  toolName   String
+  toolAction String
+  amountUsd  Float
+  createdAt  DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, agentId])
+}
+
+model BudgetLimit {
+  id            String   @id @default(cuid())
+  orgId         String
+  agentId       String?
+  dailyLimitUsd Float
+  createdAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, agentId])
+}
+
+model RateLimitPolicy {
+  id             String   @id @default(cuid())
+  orgId          String
+  agentId        String?
+  callsPerMinute Int
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, agentId])
+}
+
+model AuditEvent {
+  id              String     @id @default(cuid())
+  timestamp       DateTime   @default(now())
+  orgId           String
+  userId          String?
+  agentId         String
+  sessionId       String?
+  toolName        String
+  toolAction      String
+  decision        Decision
+  costEstimateUsd Float      @default(0)
+  latencyMs       Int?
+  status          AuditStatus
+  policyTrace     Json
+  inputSummary    String?
+  outputSummary   String?
+  errorMessage    String?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, timestamp])
+  @@index([agentId, timestamp])
+}
+
+model ApprovalRequest {
+  id              String         @id @default(cuid())
+  orgId           String
+  userId          String?
+  agentId         String
+  sessionId       String?
+  toolName        String
+  toolAction      String
+  costEstimateUsd Float
+  status          ApprovalStatus @default(PENDING)
+  requestedAt     DateTime       @default(now())
+  decidedAt       DateTime?
+  decidedBy       String?
+  trace           Json
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, requestedAt])
+}
+
+model AgentRun {
+  id                String       @id
+  orgId             String
+  agentId           String
+  sessionId         String?
+  userId            String?
+  source            EventSource
+  provider          String?
+  model             String?
+  framework         String?
+  runtime           String?
+  taskName          String?
+  promptHash        String?
+  status            RunStatus    @default(RUNNING)
+  startedAt         DateTime     @default(now())
+  endedAt           DateTime?
+  durationMs        Int?
+  totalInputTokens  Int          @default(0)
+  totalOutputTokens Int          @default(0)
+  totalCostUsd      Float        @default(0)
+  totalToolCalls    Int          @default(0)
+  errorMessage      String?
+  riskScore         Float?
+  tags              Json?
+  metadata          Json?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  events       AgentEvent[]
+
+  @@index([orgId, startedAt])
+  @@index([agentId, startedAt])
+  @@index([status, startedAt])
+}
+
+model AgentEvent {
+  id              String         @id @default(cuid())
+  externalEventId String?        @unique
+  runId           String
+  orgId           String
+  agentId         String
+  timestamp       DateTime       @default(now())
+  type            AgentEventType
+  source          EventSource
+  provider        String?
+  model           String?
+  stepName        String?
+  toolName        String?
+  toolAction      String?
+  inputTokens     Int?
+  outputTokens    Int?
+  costUsd         Float          @default(0)
+  latencyMs       Int?
+  status          String?
+  errorMessage    String?
+  sequence        Int?
+  inputPayload    Json?
+  outputPayload   Json?
+  parameters      Json?
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+
+  run          AgentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([runId, timestamp])
+  @@index([orgId, timestamp])
+  @@index([agentId, timestamp])
+  @@index([type, timestamp])
+}
