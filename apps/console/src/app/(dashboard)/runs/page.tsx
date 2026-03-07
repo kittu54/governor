@@ -29,7 +29,7 @@ interface RunsResponse {
 
 export default async function RunsPage() {
   const orgId = await resolveOrgId();
-  const data = await apiGet<RunsResponse>(`/v1/runs?org_id=${orgId}&limit=200`).catch(() => ({ runs: [] }));
+  const data = await apiGet<RunsResponse>(`/v1/runs?org_id=${encodeURIComponent(orgId)}&limit=200`).catch(() => ({ runs: [] }));
 
   const totalCost = data.runs.reduce((sum, run) => sum + run.total_cost_usd, 0);
   const errored = data.runs.filter((run) => run.status === "ERROR").length;
@@ -159,7 +159,7 @@ export default async function RunsPage() {
                     </TableCell>
                     <TableCell className="font-mono">${run.total_cost_usd.toFixed(4)}</TableCell>
                     <TableCell>
-                      <Link href={`/runs/${run.id}` as Route} className="text-sm font-medium text-primary hover:underline">
+                      <Link href={`/runs/${run.id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-sm font-medium text-primary hover:underline">
                         Open
                       </Link>
                     </TableCell>

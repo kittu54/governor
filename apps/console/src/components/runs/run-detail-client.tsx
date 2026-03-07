@@ -14,6 +14,7 @@ type ExperienceMode = "EASY" | "PRO" | "HARDCORE";
 
 interface RunDetailClientProps {
   runId: string;
+  orgId: string;
   data: {
     run: {
       id: string;
@@ -77,7 +78,7 @@ interface RunDetailClientProps {
   };
 }
 
-export function RunDetailClient({ runId, data }: RunDetailClientProps) {
+export function RunDetailClient({ runId, orgId, data }: RunDetailClientProps) {
   const [mode, setMode] = useState<ExperienceMode>("PRO");
   const [question, setQuestion] = useState("Why did this run cost what it cost?");
   const [answer, setAnswer] = useState<string>("");
@@ -93,7 +94,7 @@ export function RunDetailClient({ runId, data }: RunDetailClientProps) {
   async function ask() {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/runs/${runId}/analyze`, {
+      const response = await fetch(`${API_BASE_URL}/v1/runs/${runId}/analyze?org_id=${encodeURIComponent(orgId)}`, {
         method: "POST",
         headers: {
           "content-type": "application/json"

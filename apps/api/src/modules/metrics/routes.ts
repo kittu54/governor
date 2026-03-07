@@ -131,14 +131,24 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/agents/:agentId", async (request) => {
     const params = request.params as { agentId: string };
-    const query = request.query as { days?: string };
+    const query = request.query as { org_id?: string; days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+    if (!query.org_id) {
+      throw app.httpErrors.badRequest("org_id query parameter is required");
+    }
+
     const [agent, events] = await Promise.all([
-      app.prisma.agent.findUnique({ where: { id: params.agentId } }),
+      app.prisma.agent.findFirst({
+        where: {
+          id: params.agentId,
+          orgId: query.org_id
+        }
+      }),
       app.prisma.auditEvent.findMany({
         where: {
+          orgId: query.org_id,
           agentId: params.agentId,
           timestamp: { gte: since }
         },
