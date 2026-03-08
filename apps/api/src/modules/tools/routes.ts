@@ -207,6 +207,76 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ classifications: results });
   });
 
+  app.post("/auto-classify", async (request, reply) => {
+    const { tools, org_id } = request.body as {
+      tools: { tool_name: string; tool_action: string; description?: string }[];
+      org_id: string;
+    };
+
+    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    if (!Array.isArray(tools) || tools.length === 0) {
+      return reply.status(400).send({ error: "tools array is required" });
+    }
+    if (tools.length > 100) {
+      return reply.status(400).send({ error: "Maximum 100 tools per request" });
+    }
+
+    const results = [];
+    for (const tool of tools) {
+      const result = classifyToolRisk(tool.tool_name, tool.tool_action);
+
+      await app.prisma.tool.upsert({
+        where: {
+          orgId_toolName_toolAction: {
+            orgId: org_id,
+            toolName: tool.tool_name,
+            toolAction: tool.tool_action,
+          },
+        },
+        update: {
+          riskClass: result.riskClass as any,
+          isSensitive: ["MONEY_MOVEMENT", "CODE_EXECUTION", "CREDENTIAL_USE", "ADMIN_ACTION", "DATA_EXPORT"].includes(result.riskClass),
+          description: tool.description,
+        },
+        create: {
+          orgId: org_id,
+          toolName: tool.tool_name,
+          toolAction: tool.tool_action,
+          riskClass: result.riskClass as any,
+          isSensitive: ["MONEY_MOVEMENT", "CODE_EXECUTION", "CREDENTIAL_USE", "ADMIN_ACTION", "DATA_EXPORT"].includes(result.riskClass),
+          description: tool.description,
+        },
+      });
+
+      results.push({
+        tool_name: tool.tool_name,
+        tool_action: tool.tool_action,
+        risk_class: result.riskClass,
+        confidence: result.confidence,
+        explanation: result.reason,
+        source: result.source,
+        severity: RISK_CLASS_META[result.riskClass]?.severity ?? 0,
+        registered: true,
+      });
+    }
+
+    await app.prisma.auditLog.create({
+      data: {
+        orgId: org_id,
+        actorType: "SYSTEM",
+        eventType: "tools.auto_classified",
+        entityType: "Tool",
+        summary: `Auto-classified ${results.length} tools`,
+        payload: { tool_count: results.length, classifications: results.map((r) => `${r.tool_name}.${r.tool_action} → ${r.risk_class}`) } as any,
+      },
+    });
+
+    return reply.send({
+      classifications: results,
+      total: results.length,
+    });
+  });
+
   app.get("/risk-classes", async (_request, reply) => {
     return reply.send({
       risk_classes: RISK_CLASSES.map((rc) => ({

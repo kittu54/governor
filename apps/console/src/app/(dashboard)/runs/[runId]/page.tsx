@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { RunDetailClient } from "@/components/runs/run-detail-client";
 import { resolveOrgId } from "@/lib/org";
 

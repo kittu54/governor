@@ -33,6 +33,7 @@ class FakePrisma {
   public rateLimits: any[] = [];
   public audits: any[] = [];
   public approvals: any[] = [];
+  public evaluations: any[] = [];
 
   auditEvent = {
     aggregate: async ({ where }: any) => {
@@ -57,6 +58,27 @@ class FakePrisma {
     }
   };
 
+  evaluation = {
+    create: async ({ data }: any) => {
+      const record = { id: `eval_${++this.counter}`, ...data };
+      this.evaluations.push(record);
+      return record;
+    }
+  };
+
+  tool = {
+    findUnique: async () => null,
+    findMany: async () => []
+  };
+
+  agent = {
+    findUnique: async () => null
+  };
+
+  organization = {
+    findUnique: async () => null
+  };
+
   policyRule = {
     findMany: async ({ where }: any) => this.rules.filter((rule) => rule.orgId === where.orgId)
   };
@@ -77,6 +99,10 @@ class FakePrisma {
       this.rateLimits
         .filter((rateLimit) => rateLimit.orgId === where.orgId && rateLimit.agentId === where.agentId)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null
+  };
+
+  approvalPolicy = {
+    findMany: async () => []
   };
 
   approvalRequest = {

@@ -54,8 +54,81 @@ It works with agents built on **any framework** — LangChain, CrewAI, AutoGen, 
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## Quick Start — Protect Your Agent in 60 Seconds
+
+### 1. Install and Start
+
+```bash
+git clone https://github.com/kittu54/governor
+cd governor
+make bootstrap    # installs deps, starts Postgres + Redis, runs migrations
+make dev          # starts API on :4000 and Console on :3000
+```
+
+### 2. Protect Your Agent
+
+```typescript
+import { protectAgent } from "@governor/sdk";
+
+const agent = protectAgent({
+  "stripe.refund": issueRefund,
+  "email.send": sendEmail,
+  "shell.exec": runShell,
+  "database.query": queryDB,
+});
+
+// Every tool call is now governed
+await agent.call("stripe.refund", { order_id: "ord_123", amount: 500 });
+// → REQUIRE_APPROVAL (MONEY_MOVEMENT > $200)
+
+await agent.call("shell.exec", { command: "rm -rf /" });
+// → DENIED (CODE_EXECUTION blocked by firewall)
+
+await agent.call("database.query", { sql: "SELECT * FROM users" });
+// → ALLOWED (LOW_RISK, audited)
+```
+
+### 3. Review Actions
+
+Open the Console at **http://localhost:3000/actions** to see every governed action.
+
+No policies needed. No configuration required. The AI Action Firewall protects your agents immediately.
+
+## AI Action Firewall
+
+Governor includes a zero-configuration protection layer that activates automatically. When you install Governor, your agents are immediately protected:
+
+| Risk Class | Default Action | Examples |
+|------------|---------------|---------|
+| `CODE_EXECUTION` | **Deny** | `shell.exec`, `eval.run` |
+| `CREDENTIAL_USE` | **Deny** | `vault.get`, `secrets.read` |
+| `FILE_MUTATION` (delete) | **Deny** | `fs.delete`, `file.delete` |
+| `MONEY_MOVEMENT` > $200 | **Require Approval** | `stripe.refund`, `paypal.transfer` |
+| `DATA_EXPORT` | **Require Approval** | `s3.export`, `data.download` |
+| `EXTERNAL_COMMUNICATION` | **Require Approval** | `email.send`, `slack.message` |
+| `ADMIN_ACTION` | **Require Approval** | `admin.delete`, `iam.grant` |
+| `PII_ACCESS` | **Require Approval** | `customer.lookup_pii` |
+| `DATA_WRITE` | **Allow + Audit** | `postgres.update`, `mongo.insert` |
+| `LOW_RISK` | **Allow + Audit** | `database.read`, `cache.get` |
+
+Override any rule by adding your own policies in Policy Studio.
+
+## Governor CLI
+
+```bash
+npx @governor/cli init my-org my-agent    # Initialize project
+npx @governor/cli status                   # Check firewall status
+npx @governor/cli actions                  # List recent actions
+npx @governor/cli inspect stripe.refund    # Classify a tool
+npx @governor/cli simulate stripe.refund 500  # Simulate evaluation
+npx @governor/cli rules                    # Show firewall rules
+```
+
 **Core capabilities:**
 
+- **AI Action Firewall** — zero-config protection with safe defaults. Automatically blocks dangerous tools and requires approval for risky operations.
+- **protectAgent() SDK** — protect an agent with a single function call. Wraps all tools, classifies risk, installs firewall, and logs everything.
+- **Action Explorer** — see every governed tool invocation with risk classification, policy decision, approval status, and evaluation trace.
 - **Governance Gateway SDK** — wraps tool calls and enforces policy decisions before execution, with retry logic and configurable fallback.
 - **Policy Engine** — evaluates rules using a conditions DSL, semantic risk classification, enforcement modes (DEV/STAGING/PROD), budget checks, rate limits, and approval requirements.
 - **Policy Versioning** — create, version, compile, publish, and roll back policy sets with full diff and audit trail.
@@ -147,20 +220,24 @@ Tools are classified by: (1) registered overrides in the tool registry, (2) defa
 governor/
 ├── apps/
 │   ├── api/              Fastify API service — governance, audit, tools, metrics, webhooks, MCP, simulation
-│   │   ├── src/modules/  Feature modules (policy, tools, approvals, audit, metrics, mcp, simulation, etc.)
+│   │   ├── src/modules/  Feature modules (policy, tools, approvals, audit, metrics, mcp, simulation,
+│   │   │                 firewall, actions, alerts)
 │   │   ├── prisma/       Database schema, migrations, and seed data
 │   │   └── test/         Integration tests
 │   │
 │   └── console/          Next.js 15 visual control tower
-│       ├── src/app/      App Router pages (overview, runs, approvals, policy-studio, tools, mcp, audit, etc.)
-│       └── src/components/ UI components (layout, charts, policy, tools, mcp, approvals, audit)
+│       ├── src/app/      App Router pages (actions, overview, runs, approvals, policy-studio, tools,
+│       │                 mcp, audit, alerts, etc.)
+│       └── src/components/ UI components (layout, actions, alerts, charts, policy, tools, mcp, approvals)
 │
 ├── packages/
-│   ├── sdk/              Integration SDK — wrapTool, telemetry, provider adapters, error classes
+│   ├── sdk/              Integration SDK — protectAgent, wrapTool, telemetry, provider adapters
+│   ├── cli/              Governor CLI — init, inspect, simulate, actions, rules
 │   ├── policy-engine/    Pure TypeScript policy evaluation, conditions DSL, compile, explain, diff
-│   └── shared/           Shared types, Zod schemas, risk taxonomy, and contracts
+│   └── shared/           Shared types, Zod schemas, risk taxonomy, firewall defaults, and contracts
 │
 ├── examples/
+│   ├── quickstart/       Protect an agent in 3 lines with protectAgent()
 │   ├── openai-agent/     OpenAI function-calling tools with Governor governance
 │   ├── langchain-agent/  LangChain tools with wrapLangChainTool
 │   ├── mcp-server/       MCP server dispatch with evaluate()

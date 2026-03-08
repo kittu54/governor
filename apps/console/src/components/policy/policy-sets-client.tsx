@@ -11,8 +11,7 @@ import {
   Loader2, Plus, FileText, Upload, RotateCcw, ChevronDown,
   ChevronRight, Hash, GitBranch, Eye, AlertTriangle,
 } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { API_BASE_URL } from "@/lib/api";
 
 interface PolicyItem {
   id: string;
@@ -115,7 +114,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
     setExpandedId(policyId);
     setVersionDetail(null);
     try {
-      const res = await fetch(`${API}/v1/policies/v2/${policyId}/versions?org_id=${orgId}`);
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/${policyId}/versions?org_id=${orgId}`);
       if (res.ok) {
         const data = await res.json();
         setVersions(data.versions);
@@ -129,7 +128,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
 
   async function viewVersionDetail(versionId: string) {
     try {
-      const res = await fetch(`${API}/v1/policies/v2/versions/${versionId}`);
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}`);
       if (res.ok) {
         setVersionDetail(await res.json());
       } else {
@@ -149,7 +148,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
         enforcement_mode: formData.get("enforcement_mode"),
       };
 
-      const res = await fetch(`${API}/v1/policies/v2`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -188,7 +187,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
         change_summary: formData.get("change_summary") || undefined,
       };
 
-      const res = await fetch(`${API}/v1/policies/v2/${policyId}/versions?org_id=${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/${policyId}/versions?org_id=${orgId}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -219,7 +218,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
   async function publishVersion(versionId: string, policyId: string, versionNumber: number) {
     setLoadingAction(versionId);
     try {
-      const res = await fetch(`${API}/v1/policies/v2/versions/${versionId}/publish?org_id=${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}/publish?org_id=${orgId}`, {
         method: "POST",
       });
 
@@ -245,7 +244,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
   async function rollbackVersion(versionId: string, policyId: string, versionNumber: number) {
     setLoadingAction(versionId);
     try {
-      const res = await fetch(`${API}/v1/policies/v2/versions/${versionId}/rollback-target?org_id=${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}/rollback-target?org_id=${orgId}`, {
         method: "POST",
       });
 

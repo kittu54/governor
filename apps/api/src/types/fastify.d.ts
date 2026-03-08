@@ -15,6 +15,8 @@ declare module "fastify" {
     auth: {
       orgId?: string;
       userId?: string;
+      apiKeyId?: string;
+      authMethod?: "clerk" | "api_key" | "dev_header";
     };
   }
 }

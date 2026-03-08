@@ -6,6 +6,7 @@ import {
   rateLimitSchema,
   thresholdSchema
 } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 import { PolicyService } from "./service";
 
 export const policyRoutes: FastifyPluginAsync = async (app) => {
@@ -40,9 +41,10 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/rules", async (request, reply) => {
     const payload = policyRuleSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const rule = await app.prisma.policyRule.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         agentId: payload.agent_id ?? null,
         toolName: payload.tool_name,
         toolAction: payload.tool_action,
@@ -57,9 +59,10 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/thresholds", async (request, reply) => {
     const payload = thresholdSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const threshold = await app.prisma.approvalThreshold.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         agentId: payload.agent_id ?? null,
         toolName: payload.tool_name,
         toolAction: payload.tool_action,
@@ -72,9 +75,10 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/budgets", async (request, reply) => {
     const payload = budgetSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const budget = await app.prisma.budgetLimit.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         agentId: payload.agent_id ?? null,
         dailyLimitUsd: payload.daily_limit_usd
       }
@@ -85,9 +89,10 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/rate-limits", async (request, reply) => {
     const payload = rateLimitSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const rateLimit = await app.prisma.rateLimitPolicy.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         agentId: payload.agent_id ?? null,
         callsPerMinute: payload.calls_per_minute
       }
@@ -98,42 +103,38 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/rules/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    try {
-      await app.prisma.policyRule.delete({ where: { id } });
-      return reply.code(204).send();
-    } catch {
-      throw app.httpErrors.notFound("Rule not found");
-    }
+    const orgId = resolveRequestOrg(request);
+    const rule = await app.prisma.policyRule.findFirst({ where: { id, orgId } });
+    if (!rule) throw app.httpErrors.notFound("Not found");
+    await app.prisma.policyRule.delete({ where: { id } });
+    return reply.code(204).send();
   });
 
   app.delete("/thresholds/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    try {
-      await app.prisma.approvalThreshold.delete({ where: { id } });
-      return reply.code(204).send();
-    } catch {
-      throw app.httpErrors.notFound("Threshold not found");
-    }
+    const orgId = resolveRequestOrg(request);
+    const threshold = await app.prisma.approvalThreshold.findFirst({ where: { id, orgId } });
+    if (!threshold) throw app.httpErrors.notFound("Not found");
+    await app.prisma.approvalThreshold.delete({ where: { id } });
+    return reply.code(204).send();
   });
 
   app.delete("/budgets/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    try {
-      await app.prisma.budgetLimit.delete({ where: { id } });
-      return reply.code(204).send();
-    } catch {
-      throw app.httpErrors.notFound("Budget not found");
-    }
+    const orgId = resolveRequestOrg(request);
+    const budget = await app.prisma.budgetLimit.findFirst({ where: { id, orgId } });
+    if (!budget) throw app.httpErrors.notFound("Not found");
+    await app.prisma.budgetLimit.delete({ where: { id } });
+    return reply.code(204).send();
   });
 
   app.delete("/rate-limits/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    try {
-      await app.prisma.rateLimitPolicy.delete({ where: { id } });
-      return reply.code(204).send();
-    } catch {
-      throw app.httpErrors.notFound("Rate limit not found");
-    }
+    const orgId = resolveRequestOrg(request);
+    const rateLimit = await app.prisma.rateLimitPolicy.findFirst({ where: { id, orgId } });
+    if (!rateLimit) throw app.httpErrors.notFound("Not found");
+    await app.prisma.rateLimitPolicy.delete({ where: { id } });
+    return reply.code(204).send();
   });
 
   app.post("/simulate", async (request) => {

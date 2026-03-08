@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 function formatDay(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -6,27 +7,28 @@ function formatDay(date: Date): string {
 
 export const metricsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/overview", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const [events, pendingApprovals, runs] = await Promise.all([
       app.prisma.auditEvent.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           timestamp: { gte: since }
         },
         orderBy: { timestamp: "asc" }
       }),
       app.prisma.approvalRequest.count({
         where: {
-          orgId: query.org_id,
+          orgId,
           status: "PENDING"
         }
       }),
       app.prisma.agentRun.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           startedAt: { gte: since }
         }
       })
@@ -91,38 +93,13 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  app.get("/tenants", async () => {
-    const [orgs, events, approvals] = await Promise.all([
-      app.prisma.organization.findMany(),
-      app.prisma.auditEvent.findMany(),
-      app.prisma.approvalRequest.findMany({ where: { status: "PENDING" } })
-    ]);
-
-    const metrics = orgs.map((org) => {
-      const orgEvents = events.filter((event) => event.orgId === org.id);
-      const totalCalls = orgEvents.length;
-      const cost = orgEvents.reduce((sum, event) => sum + event.costEstimateUsd, 0);
-      const blocked = orgEvents.filter((event) => event.decision === "DENY").length;
-
-      return {
-        org_id: org.id,
-        org_name: org.name,
-        tool_calls: totalCalls,
-        estimated_cost_usd: Number(cost.toFixed(2)),
-        blocked_pct: totalCalls === 0 ? 0 : Number(((blocked / totalCalls) * 100).toFixed(2)),
-        pending_approvals: approvals.filter((item) => item.orgId === org.id).length
-      };
-    });
-
-    return { tenants: metrics };
-  });
-
   app.get("/agents", async (request) => {
-    const query = request.query as { org_id?: string; limit?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { limit?: string };
     const limit = Math.min(Number(query.limit ?? 50), 100);
 
     const agents = await app.prisma.agent.findMany({
-      where: { orgId: query.org_id },
+      where: { orgId },
       take: limit
     });
 
@@ -130,25 +107,22 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/agents/:agentId", async (request) => {
+    const orgId = resolveRequestOrg(request);
     const params = request.params as { agentId: string };
-    const query = request.query as { org_id?: string; days?: string };
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-    if (!query.org_id) {
-      throw app.httpErrors.badRequest("org_id query parameter is required");
-    }
 
     const [agent, events] = await Promise.all([
       app.prisma.agent.findFirst({
         where: {
           id: params.agentId,
-          orgId: query.org_id
+          orgId
         }
       }),
       app.prisma.auditEvent.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           agentId: params.agentId,
           timestamp: { gte: since }
         },
@@ -190,13 +164,14 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/provider-breakdown", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const runs = await app.prisma.agentRun.findMany({
       where: {
-        orgId: query.org_id,
+        orgId,
         startedAt: { gte: since }
       }
     });
@@ -235,31 +210,32 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/frameworks", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const [agents, audits, runs, apiKeys] = await Promise.all([
       app.prisma.agent.findMany({
-        where: { orgId: query.org_id },
+        where: { orgId },
         select: { id: true, framework: true, status: true }
       }),
       app.prisma.auditEvent.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           timestamp: { gte: since }
         },
         select: { agentId: true, decision: true, costEstimateUsd: true }
       }),
       app.prisma.agentRun.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           startedAt: { gte: since }
         },
         select: { agentId: true, totalCostUsd: true, status: true }
       }),
       app.prisma.apiKey.findMany({
-        where: { orgId: query.org_id, revokedAt: null },
+        where: { orgId, revokedAt: null },
         select: { framework: true, lastUsedAt: true }
       })
     ]);
@@ -336,12 +312,13 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Risk Class Metrics ────────────────────────────────────
   app.get("/risk-classes", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const evaluations = await app.prisma.evaluation.findMany({
-      where: { orgId: query.org_id, createdAt: { gte: since } },
+      where: { orgId, createdAt: { gte: since } },
       select: { riskClass: true, decision: true, costEstimateUsd: true },
     });
 
@@ -372,12 +349,13 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Approval Metrics ──────────────────────────────────────
   app.get("/approvals", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const approvals = await app.prisma.approvalRequest.findMany({
-      where: { orgId: query.org_id, requestedAt: { gte: since } },
+      where: { orgId, requestedAt: { gte: since } },
       select: { status: true, toolName: true, riskClass: true, costEstimateUsd: true, requestedAt: true, decidedAt: true },
     });
 
@@ -405,17 +383,18 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Cost Metrics ──────────────────────────────────────────
   app.get("/costs", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 30), 1), 90);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const [evaluations, runs] = await Promise.all([
       app.prisma.evaluation.findMany({
-        where: { orgId: query.org_id, createdAt: { gte: since } },
+        where: { orgId, createdAt: { gte: since } },
         select: { costEstimateUsd: true, decision: true, createdAt: true, agentId: true },
       }),
       app.prisma.agentRun.findMany({
-        where: { orgId: query.org_id, startedAt: { gte: since } },
+        where: { orgId, startedAt: { gte: since } },
         select: { totalCostUsd: true, startedAt: true },
       }),
     ]);
@@ -460,13 +439,14 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Governance Summary ────────────────────────────────────
   app.get("/governance", async (request) => {
-    const query = request.query as { org_id?: string; days?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const [evaluations, approvals, agents] = await Promise.all([
       app.prisma.evaluation.findMany({
-        where: { orgId: query.org_id, createdAt: { gte: since } },
+        where: { orgId, createdAt: { gte: since } },
         select: {
           decision: true,
           riskClass: true,
@@ -478,11 +458,11 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
         },
       }),
       app.prisma.approvalRequest.findMany({
-        where: { orgId: query.org_id, requestedAt: { gte: since } },
+        where: { orgId, requestedAt: { gte: since } },
         select: { status: true, costEstimateUsd: true },
       }),
       app.prisma.agent.findMany({
-        where: { orgId: query.org_id },
+        where: { orgId },
         select: { id: true, status: true },
       }),
     ]);
@@ -538,13 +518,14 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Tool-Level Metrics ────────────────────────────────────
   app.get("/tools", async (request) => {
-    const query = request.query as { org_id?: string; days?: string; limit?: string };
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { days?: string; limit?: string };
     const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const limit = Math.min(Number(query.limit ?? 20), 100);
 
     const evaluations = await app.prisma.evaluation.findMany({
-      where: { orgId: query.org_id, createdAt: { gte: since } },
+      where: { orgId, createdAt: { gte: since } },
       select: { toolName: true, toolAction: true, riskClass: true, decision: true, costEstimateUsd: true },
     });
 

@@ -14,8 +14,7 @@ import {
   ArrowLeft, Bot, Pencil, Save, X, Loader2,
   ShieldCheck, AlertTriangle, Wallet, Gauge, Layers, Clock
 } from "lucide-react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { API_BASE_URL } from "@/lib/api";
 
 interface PolicyRule {
   id: string;

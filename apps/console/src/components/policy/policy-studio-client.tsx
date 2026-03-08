@@ -9,8 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Scale, Trash2, Loader2, Plus, ShieldCheck, AlertTriangle, Gauge, Wallet } from "lucide-react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { API_BASE_URL } from "@/lib/api";
 
 interface PolicyRule {
   id: string;

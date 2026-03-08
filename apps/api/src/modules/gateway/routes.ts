@@ -120,8 +120,8 @@ export const gatewayRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "request_id and status are required" });
     }
 
-    await app.prisma.auditEvent.update({
-      where: { id: body.request_id },
+    await app.prisma.auditEvent.updateMany({
+      where: { id: body.request_id, orgId: apiKey.orgId },
       data: {
         status: body.status,
         latencyMs: body.latency_ms,

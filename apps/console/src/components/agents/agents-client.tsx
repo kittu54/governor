@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, Plus, X, Loader2, Search, Filter, ShieldCheck, Clock, Layers } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -36,7 +37,6 @@ interface AgentsClientProps {
   orgId: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const STATUS_OPTIONS = ["ALL", "ACTIVE", "INACTIVE", "SUSPENDED"] as const;
 
 export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {

@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { resolveOrgId } from "@/lib/org";
 import { AgentDetailClient } from "@/components/agents/agent-detail-client";
 import { notFound } from "next/navigation";

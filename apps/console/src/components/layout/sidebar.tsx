@@ -6,7 +6,7 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import {
   ShieldCheck, Activity, UserRoundCog, Bot, Scale, FileSearch,
-  Menu, X, Settings, Plug, Shield, ScrollText, Server, User,
+  Menu, X, Settings, Plug, Shield, ScrollText, Server, Zap, Bell, Rocket, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +25,7 @@ const navSections: NavSection[] = [
   {
     title: "Monitor",
     items: [
+      { href: "/actions", label: "Actions", icon: Zap },
       { href: "/overview", label: "Overview", icon: Activity },
       { href: "/runs", label: "Run Explorer", icon: FileSearch },
       { href: "/audit", label: "Audit Log", icon: ScrollText },
@@ -37,6 +38,7 @@ const navSections: NavSection[] = [
       { href: "/approvals", label: "Approvals", icon: UserRoundCog },
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/tools", label: "Tool Registry", icon: Shield },
+      { href: "/alerts", label: "Alerts", icon: Bell },
     ],
   },
   {
@@ -49,7 +51,7 @@ const navSections: NavSection[] = [
 ];
 
 const bottomNavItems: NavItem[] = [
-  { href: "/profile", label: "Profile", icon: User },
+  { href: "/docs", label: "Documentation", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -101,6 +103,14 @@ export function Sidebar() {
             </h1>
           </div>
         </div>
+      </div>
+
+      <div className="mb-3">
+        <NavLink
+          item={{ href: "/quickstart", label: "Getting Started", icon: Rocket }}
+          pathname={pathname}
+          onClick={() => setMobileOpen(false)}
+        />
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto">

@@ -1,13 +1,19 @@
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { isClerkEnabled } from "./clerk";
 
-export async function resolveOrgId() {
-  const fallbackOrgId = process.env.GOVERNOR_ORG_ID ?? "org_demo_1";
-
+export async function resolveOrgId(): Promise<string> {
   if (!isClerkEnabled) {
-    return fallbackOrgId;
+    const envOrgId = process.env.GOVERNOR_ORG_ID;
+    if (!envOrgId) {
+      redirect("/quickstart");
+    }
+    return envOrgId;
   }
 
   const { orgId } = await auth();
-  return orgId ?? fallbackOrgId;
+  if (!orgId) {
+    redirect("/quickstart");
+  }
+  return orgId;
 }

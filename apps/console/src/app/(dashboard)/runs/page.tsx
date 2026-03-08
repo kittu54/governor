@@ -1,5 +1,5 @@
 import { resolveOrgId } from "@/lib/org";
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { RunsClient } from "@/components/runs/runs-client";
 
 interface RunsResponse {

@@ -16,6 +16,11 @@ import { auditLogRoutes } from "../modules/auditlog/routes";
 import { webhooksRoutes } from "../modules/webhooks/routes";
 import { simulationRoutes } from "../modules/simulation/routes";
 import { mcpRoutes } from "../modules/mcp/routes";
+import { firewallRoutes } from "../modules/firewall/routes";
+import { actionsRoutes } from "../modules/actions/routes";
+import { alertRoutes } from "../modules/alerts/routes";
+import { billingRoutes } from "../modules/billing/routes";
+import { onboardingRoutes } from "../modules/onboarding/routes";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(evaluateRoutes);
@@ -35,4 +40,9 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(webhooksRoutes, { prefix: "/webhooks" });
   await app.register(simulationRoutes, { prefix: "/simulation" });
   await app.register(mcpRoutes, { prefix: "/mcp" });
+  await app.register(firewallRoutes, { prefix: "/firewall" });
+  await app.register(actionsRoutes, { prefix: "/actions" });
+  await app.register(alertRoutes, { prefix: "/alerts" });
+  await app.register(billingRoutes, { prefix: "/billing" });
+  await app.register(onboardingRoutes, { prefix: "/onboarding" });
 };

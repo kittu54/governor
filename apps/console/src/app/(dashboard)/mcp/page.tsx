@@ -1,6 +1,6 @@
 import { MCPServersClient } from "@/components/mcp/mcp-servers-client";
 import { resolveOrgId } from "@/lib/org";
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 
 interface MCPServer {
   id: string;

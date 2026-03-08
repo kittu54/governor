@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet, API_BASE_URL } from "@/lib/api-server";
 import { resolveOrgId } from "@/lib/org";
 import { IntegrationsClient } from "@/components/integrations/integrations-client";
 
@@ -33,7 +33,6 @@ interface FrameworksResponse {
 
 export default async function IntegrationsPage() {
   const orgId = await resolveOrgId();
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
   const [keysData, frameworksData] = await Promise.all([
     apiGet<KeysResponse>(`/v1/api-keys?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ keys: [] })),
@@ -43,7 +42,7 @@ export default async function IntegrationsPage() {
   return (
     <IntegrationsClient
       orgId={orgId}
-      apiBaseUrl={apiBaseUrl}
+      apiBaseUrl={API_BASE_URL}
       initialKeys={keysData.keys}
       frameworks={frameworksData.frameworks}
     />

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { approvalDecisionSchema, approvalActionSchema } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 const bulkActionSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(100),
@@ -25,7 +26,8 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     const offset = Number(query.offset ?? 0);
 
     const where: Record<string, unknown> = {};
-    if (query.org_id) where.orgId = query.org_id;
+    const orgId = resolveRequestOrg(request);
+    where.orgId = orgId;
     if (query.status) where.status = query.status;
     if (query.risk_class) where.riskClass = query.risk_class;
     if (query.agent_id) where.agentId = query.agent_id;
@@ -87,9 +89,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // ─── Get Approval Detail ───────────────────────────────────
   app.get("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const orgId = resolveRequestOrg(request);
 
-    const approval = await app.prisma.approvalRequest.findUnique({
-      where: { id },
+    const approval = await app.prisma.approvalRequest.findFirst({
+      where: { id, orgId },
       include: {
         actions: { orderBy: { createdAt: "asc" } },
         agent: { select: { name: true, framework: true, status: true } },
@@ -130,12 +133,14 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // ─── Legacy: single decision endpoint ──────────────────────
   app.post("/decision", async (request, reply) => {
     const payload = approvalDecisionSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request);
 
     const existing = await app.prisma.approvalRequest.findUnique({
       where: { id: payload.approval_id },
     });
 
     if (!existing) throw app.httpErrors.notFound("Approval request not found");
+    if (existing.orgId !== orgId) throw app.httpErrors.notFound("Approval request not found");
     if (existing.status !== "PENDING") throw app.httpErrors.conflict("Approval request already decided");
 
     const status = payload.action === "APPROVE" ? "APPROVED" : "DENIED";
@@ -194,12 +199,14 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Approve ───────────────────────────────────────────────
   app.post("/:id/approve", async (request, reply) => {
-    return handleAction(app, request.params as { id: string }, request.body, "APPROVE", reply);
+    const orgId = resolveRequestOrg(request);
+    return handleAction(app, request.params as { id: string }, request.body, "APPROVE", reply, orgId);
   });
 
   // ─── Deny ─────────────────────────────────────────────────
   app.post("/:id/deny", async (request, reply) => {
-    return handleAction(app, request.params as { id: string }, request.body, "DENY", reply);
+    const orgId = resolveRequestOrg(request);
+    return handleAction(app, request.params as { id: string }, request.body, "DENY", reply, orgId);
   });
 
   // ─── Escalate ──────────────────────────────────────────────
@@ -207,7 +214,9 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string };
     const body = approvalActionSchema.parse(request.body);
 
-    const existing = await app.prisma.approvalRequest.findUnique({ where: { id } });
+    const orgId = resolveRequestOrg(request);
+
+    const existing = await app.prisma.approvalRequest.findFirst({ where: { id, orgId } });
     if (!existing) return reply.status(404).send({ error: "Approval not found" });
     if (existing.status !== "PENDING") return reply.status(409).send({ error: "Already decided" });
 
@@ -252,7 +261,9 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string };
     const body = approvalActionSchema.parse(request.body);
 
-    const existing = await app.prisma.approvalRequest.findUnique({ where: { id } });
+    const orgId = resolveRequestOrg(request);
+
+    const existing = await app.prisma.approvalRequest.findFirst({ where: { id, orgId } });
     if (!existing) return reply.status(404).send({ error: "Approval not found" });
 
     const action = await app.prisma.approvalAction.create({
@@ -272,8 +283,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     const payload = bulkActionSchema.parse(request.body);
     const status = payload.action === "APPROVE" ? "APPROVED" : "DENIED";
 
+    const orgId = resolveRequestOrg(request);
+
     const pending = await app.prisma.approvalRequest.findMany({
-      where: { id: { in: payload.ids }, status: "PENDING" },
+      where: { id: { in: payload.ids }, orgId, status: "PENDING" },
       select: { id: true, orgId: true, agentId: true, toolName: true, toolAction: true },
     });
 
@@ -332,12 +345,13 @@ async function handleAction(
   params: { id: string },
   body: unknown,
   actionType: "APPROVE" | "DENY",
-  reply: import("fastify").FastifyReply
+  reply: import("fastify").FastifyReply,
+  orgId: string
 ) {
   const { id } = params;
   const parsed = approvalActionSchema.parse(body);
 
-  const existing = await app.prisma.approvalRequest.findUnique({ where: { id } });
+  const existing = await app.prisma.approvalRequest.findFirst({ where: { id, orgId } });
   if (!existing) return reply.status(404).send({ error: "Approval not found" });
   if (existing.status !== "PENDING") return reply.status(409).send({ error: "Already decided" });
 

@@ -11,8 +11,7 @@ import {
   Key, Plus, Trash2, Copy, Loader2, ShieldCheck,
   CheckCircle, Eye, EyeOff, Plug
 } from "lucide-react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { API_BASE_URL } from "@/lib/api";
 
 interface ApiKey {
   id: string;

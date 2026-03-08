@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { resolveOrgId } from "@/lib/org";
 import { AuditExplorerClient } from "@/components/audit/audit-explorer-client";
 

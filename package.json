@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.12.3",
   "scripts": {
     "dev": "make dev",
+    "governor:dev": "make dev",
     "build": "corepack pnpm -r build",
     "test": "corepack pnpm -r test",
     "lint": "corepack pnpm -r lint",

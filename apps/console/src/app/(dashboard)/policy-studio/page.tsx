@@ -2,7 +2,7 @@ import { PolicyStudioClient } from "@/components/policy/policy-studio-client";
 import { PolicySetsClient } from "@/components/policy/policy-sets-client";
 import { SimulationClient } from "@/components/policy/simulation-client";
 import { resolveOrgId } from "@/lib/org";
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 
 interface PoliciesResponse {
   rules: Array<{

@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { ApprovalsClient } from "@/components/approvals/approvals-client";
 import { resolveOrgId } from "@/lib/org";
 

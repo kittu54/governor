@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { TimelineClient } from "@/components/timeline/timeline-client";
 import { resolveOrgId } from "@/lib/org";
 

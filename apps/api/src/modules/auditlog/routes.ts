@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verifyAuditChain } from "./hash";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const auditLogRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
+    const orgId = resolveRequestOrg(request);
+
     const query = request.query as {
-      org_id: string;
       event_type?: string;
       entity_type?: string;
       entity_id?: string;
@@ -16,12 +18,10 @@ export const auditLogRoutes: FastifyPluginAsync = async (app) => {
       offset?: string;
     };
 
-    if (!query.org_id) return reply.status(400).send({ error: "org_id is required" });
-
     const limit = Math.min(Number(query.limit ?? 50), 200);
     const offset = Number(query.offset ?? 0);
 
-    const where: Record<string, unknown> = { orgId: query.org_id };
+    const where: Record<string, unknown> = { orgId };
     if (query.event_type) where.eventType = query.event_type;
     if (query.entity_type) where.entityType = query.entity_type;
     if (query.entity_id) where.entityId = query.entity_id;
@@ -71,8 +71,9 @@ export const auditLogRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const orgId = resolveRequestOrg(request);
 
-    const entry = await app.prisma.auditLog.findUnique({ where: { id } });
+    const entry = await app.prisma.auditLog.findFirst({ where: { id, orgId } });
     if (!entry) return reply.status(404).send({ error: "Audit log entry not found" });
 
     return reply.send({
@@ -93,11 +94,11 @@ export const auditLogRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Verify Audit Chain Integrity ──────────────────────────
   app.get("/verify", async (request, reply) => {
-    const { org_id, limit } = request.query as { org_id: string; limit?: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const orgId = resolveRequestOrg(request);
+    const { limit } = request.query as { limit?: string };
 
     const maxEntries = Math.min(Number(limit ?? 1000), 5000);
-    const result = await verifyAuditChain(app.prisma, org_id, maxEntries);
+    const result = await verifyAuditChain(app.prisma, orgId, maxEntries);
 
     return reply.send(result);
   });

@@ -2,135 +2,101 @@
 
 Working examples showing how to integrate Governor governance into different AI agent frameworks and tool systems.
 
+## Quick Start
+
+The fastest way to try Governor:
+
+```bash
+# Start Governor locally
+make dev
+
+# Run the quickstart example
+GOVERNOR_ORG_ID=org_demo GOVERNOR_AGENT_ID=my-agent \
+  npx tsx examples/quickstart/index.ts
+```
+
 ## Examples
 
-| Example | Description | Risk Level |
+| Example | Description | Complexity |
 |---------|-------------|------------|
-| [openai-agent](./openai-agent/) | OpenAI function-calling tools with `wrapTool` | Mixed |
-| [langchain-agent](./langchain-agent/) | LangChain tools with `wrapLangChainTool` | Mixed |
-| [mcp-server](./mcp-server/) | MCP server dispatch with `evaluate()` | Mixed |
-| [internal-tool](./internal-tool/) | Internal pipeline with telemetry runs | Mixed |
+| [quickstart](./quickstart/) | **Start here.** Protect an agent in 3 lines with `protectAgent()` | Minimal |
+| [openai-agent](./openai-agent/) | OpenAI function-calling tools with `wrapTool` | Standard |
+| [langchain-agent](./langchain-agent/) | LangChain tools with `wrapLangChainTool` | Standard |
+| [mcp-server](./mcp-server/) | MCP server dispatch with `evaluate()` | Standard |
+| [internal-tool](./internal-tool/) | Internal pipeline with telemetry runs | Advanced |
 
 ## Prerequisites
 
-1. Governor API running locally:
+1. Governor running locally: `make dev`
+2. Node.js 20+
 
-```bash
-# From repository root
-make dev
+## How It Works
+
+### Zero-Config Protection (`protectAgent`)
+
+```typescript
+import { protectAgent } from "@governor/sdk";
+
+const agent = protectAgent({
+  "stripe.refund": issueRefund,
+  "email.send": sendEmail,
+  "shell.exec": runShell,
+});
+
+// Every call is now governed
+await agent.call("stripe.refund", { amount: 500 });
 ```
 
-2. Seed data loaded:
+`protectAgent()` automatically:
+- Registers tools with the Governor API
+- Classifies risk for each tool
+- Installs the AI Action Firewall (default guardrails)
+- Wraps every tool call with policy evaluation
+- Logs all actions to the audit ledger
 
-```bash
-cd apps/api && npx prisma db seed
-```
+### Default Firewall Rules
 
-## Running Examples
+| Risk Class | Default Action | Example |
+|------------|---------------|---------|
+| `CODE_EXECUTION` | **Deny** | `shell.exec` |
+| `CREDENTIAL_USE` | **Deny** | `vault.get` |
+| `FILE_MUTATION` (delete) | **Deny** | `fs.delete` |
+| `MONEY_MOVEMENT` > $200 | **Require Approval** | `stripe.refund` |
+| `DATA_EXPORT` | **Require Approval** | `s3.export` |
+| `EXTERNAL_COMMUNICATION` | **Require Approval** | `email.send` |
+| `ADMIN_ACTION` | **Require Approval** | `admin.delete_user` |
+| `PII_ACCESS` | **Require Approval** | `customer.lookup_pii` |
+| `DATA_WRITE` | **Allow + Audit** | `postgres.update` |
+| `LOW_RISK` | **Allow + Audit** | `database.read` |
 
-```bash
-# Set environment (or use .env in repo root)
-export GOVERNOR_API_BASE_URL=http://localhost:4000
-export GOVERNOR_API_KEY=dev-local-key
-export GOVERNOR_ORG_ID=org_demo_1
-export GOVERNOR_ENVIRONMENT=DEV
-
-# Run any example
-npx tsx examples/openai-agent/index.ts
-npx tsx examples/langchain-agent/index.ts
-npx tsx examples/mcp-server/index.ts
-npx tsx examples/internal-tool/index.ts
-```
-
-## Integration Patterns
-
-### Pattern 1: `wrapTool` (recommended)
-
-Best for frameworks where you define tool handlers as functions. Governor intercepts every call, evaluates policy, and either allows or blocks execution.
+### Manual Wrapping (Advanced)
 
 ```typescript
 import { createGovernorFromEnv } from "@governor/sdk";
 
 const governor = createGovernorFromEnv();
 
-const governed = governor.wrapTool({
+const governedRefund = governor.wrapTool({
   tool_name: "stripe",
   tool_action: "refund",
   handler: issueRefund,
   costEstimator: (args) => args.amount * 0.01,
 });
-
-const result = await governed({ order_id: "ord_1", amount: 50 });
 ```
 
-### Pattern 2: `wrapLangChainTool`
+## Environment Variables
 
-Returns a `{ name, invoke }` object compatible with LangChain's tool interface.
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GOVERNOR_ORG_ID` | Yes | — | Organization ID |
+| `GOVERNOR_AGENT_ID` | Yes | — | Agent identifier |
+| `GOVERNOR_API_BASE_URL` | No | `http://localhost:4000` | Governor API endpoint |
+| `GOVERNOR_API_KEY` | No | — | API key for authentication |
+| `GOVERNOR_ENVIRONMENT` | No | `DEV` | `DEV`, `STAGING`, or `PROD` |
 
-```typescript
-const tool = governor.wrapLangChainTool("sql_query", queryDb);
-const result = await tool.invoke({ query: "SELECT ..." });
-```
+## After Running
 
-### Pattern 3: Direct `evaluate()`
-
-For full control — call `evaluate()` yourself and handle the decision.
-
-```typescript
-const evaluation = await governor.evaluate({
-  tool_name: "aws_lambda",
-  tool_action: "invoke",
-  input_summary: "process-payments",
-});
-
-if (evaluation.decision === "DENY") {
-  throw new Error(`Blocked: ${evaluation.reason}`);
-}
-
-// Execute the tool only if allowed
-await invokeLambda(args);
-```
-
-### Pattern 4: Telemetry Runs
-
-Track multi-step agent runs for observability and analytics.
-
-```typescript
-const run = governor.createTelemetryRun({
-  run_id: "run_123",
-  source: "cron_job",
-  task_name: "daily_report",
-});
-
-await run.start();
-await run.step("fetched_data", { rows: 100 });
-await run.complete({ success: true });
-```
-
-## Enforcement Modes
-
-| Mode | Behavior |
-|------|----------|
-| `DEV` | Allow all, log warnings for sensitive actions |
-| `STAGING` | Allow all, warn with `would_deny_in_prod` flag |
-| `PROD` | Deny sensitive actions unless explicitly allowed by policy |
-
-Set via `GOVERNOR_ENVIRONMENT` env var or `environment` in config.
-
-## Error Handling
-
-```typescript
-import { GovernorDeniedError, GovernorApprovalRequiredError } from "@governor/sdk";
-
-try {
-  await governedTool(args);
-} catch (err) {
-  if (err instanceof GovernorDeniedError) {
-    // Tool call was blocked by policy
-    console.log(err.reason, err.risk_class, err.enforcement_mode);
-  } else if (err instanceof GovernorApprovalRequiredError) {
-    // Tool call needs human approval before proceeding
-    console.log(err.approval_request_id);
-  }
-}
-```
+1. Open the Governor Console: http://localhost:3000
+2. Navigate to **Actions** to see all governed tool invocations
+3. Click any action to see the full evaluation trace
+4. Check **Approvals** for pending approval requests

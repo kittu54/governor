@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { createPolicySchema, updatePolicySchema, createPolicyVersionSchema, policyDefinitionSchema } from "@governor/shared";
 import { compilePolicy, generateChecksum, diffPolicyDefinitions } from "@governor/policy-engine";
 import type { PolicyDefinition } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── List Policies ──────────────────────────────────────────
@@ -253,13 +254,16 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Get Policy Version Detail ─────────────────────────────
   app.get("/versions/:versionId", async (request, reply) => {
     const { versionId } = request.params as { versionId: string };
+    const orgId = resolveRequestOrg(request);
 
     const version = await app.prisma.policyVersion.findUnique({
       where: { id: versionId },
       include: { policy: true },
     });
 
-    if (!version) return reply.status(404).send({ error: "Policy version not found" });
+    if (!version || version.policy.orgId !== orgId) {
+      return reply.status(404).send({ error: "Policy version not found" });
+    }
 
     return reply.send({
       id: version.id,
@@ -416,13 +420,17 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Diff Versions (structured) ────────────────────────────
   app.get("/versions/:versionId/diff/:otherVersionId", async (request, reply) => {
     const { versionId, otherVersionId } = request.params as { versionId: string; otherVersionId: string };
+    const orgId = resolveRequestOrg(request);
 
     const [v1, v2] = await Promise.all([
-      app.prisma.policyVersion.findUnique({ where: { id: versionId } }),
-      app.prisma.policyVersion.findUnique({ where: { id: otherVersionId } }),
+      app.prisma.policyVersion.findUnique({ where: { id: versionId }, include: { policy: true } }),
+      app.prisma.policyVersion.findUnique({ where: { id: otherVersionId }, include: { policy: true } }),
     ]);
 
     if (!v1 || !v2) return reply.status(404).send({ error: "One or both versions not found" });
+    if (v1.policy.orgId !== orgId || v2.policy.orgId !== orgId) {
+      return reply.status(404).send({ error: "One or both versions not found" });
+    }
     if (v1.policyId !== v2.policyId) return reply.status(400).send({ error: "Versions must belong to the same policy" });
 
     const def1 = v1.definitionJson as unknown as PolicyDefinition;

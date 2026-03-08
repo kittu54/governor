@@ -143,33 +143,42 @@ enum AuditActorType {
 // ──────────────────────────────────────────────────────────────
 
 model Organization {
-  id                 String              @id
-  name               String
-  slug               String?             @unique
-  plan               String              @default("free")
-  defaultMode        EnforcementMode     @default(DEV)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @default(now()) @updatedAt
-  agents             Agent[]
-  policyRules        PolicyRule[]
-  thresholds         ApprovalThreshold[]
-  budgetLimits       BudgetLimit[]
-  rateLimitPolicies  RateLimitPolicy[]
-  auditEvents        AuditEvent[]
-  approvalRequests   ApprovalRequest[]
-  runs               AgentRun[]
-  agentEvents        AgentEvent[]
-  apiKeys            ApiKey[]
-  tools              Tool[]
-  policies           Policy[]
-  budgets            Budget[]
-  rateLimits         RateLimit[]
-  approvalPolicies   ApprovalPolicy[]
-  evaluations        Evaluation[]
-  auditLog           AuditLog[]
-  webhooks           Webhook[]
-  users              User[]
-  mcpServers         MCPServer[]
+  id                   String              @id
+  name                 String
+  slug                 String?             @unique
+  plan                 String              @default("free")
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?
+  billingEmail         String?
+  actionsThisMonth     Int                 @default(0)
+  actionsResetAt       DateTime?
+  defaultMode          EnforcementMode     @default(DEV)
+  firewallInstalledAt  DateTime?
+  onboardingCompletedAt DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @default(now()) @updatedAt
+  agents               Agent[]
+  policyRules          PolicyRule[]
+  thresholds           ApprovalThreshold[]
+  budgetLimits         BudgetLimit[]
+  rateLimitPolicies    RateLimitPolicy[]
+  auditEvents          AuditEvent[]
+  approvalRequests     ApprovalRequest[]
+  runs                 AgentRun[]
+  agentEvents          AgentEvent[]
+  apiKeys              ApiKey[]
+  tools                Tool[]
+  policies             Policy[]
+  budgets              Budget[]
+  rateLimits           RateLimit[]
+  approvalPolicies     ApprovalPolicy[]
+  evaluations          Evaluation[]
+  auditLog             AuditLog[]
+  webhooks             Webhook[]
+  users                User[]
+  mcpServers           MCPServer[]
+  alertConfigs         AlertConfig[]
+  usageRecords         UsageRecord[]
 }
 
 model User {
@@ -706,4 +715,49 @@ model MCPTool {
 
   @@unique([serverId, toolName])
   @@index([serverId])
+}
+
+// ──────────────────────────────────────────────────────────────
+// Alert Configuration
+// ──────────────────────────────────────────────────────────────
+
+enum AlertChannel {
+  WEBHOOK
+  SLACK
+}
+
+model AlertConfig {
+  id         String       @id @default(cuid())
+  orgId      String
+  name       String
+  channel    AlertChannel
+  alertTypes Json
+  config     Json
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+// ──────────────────────────────────────────────────────────────
+// Billing / Usage Tracking
+// ──────────────────────────────────────────────────────────────
+
+model UsageRecord {
+  id           String   @id @default(cuid())
+  orgId        String
+  period       String
+  actions      Int      @default(0)
+  evaluations  Int      @default(0)
+  storageBytes BigInt   @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, period])
+  @@index([orgId])
 }

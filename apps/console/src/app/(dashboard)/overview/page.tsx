@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CallsCostChart } from "@/components/charts/calls-cost-chart";
 import { DecisionPieChart } from "@/components/charts/decision-pie-chart";
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { resolveOrgId } from "@/lib/org";
 import {
   Activity, ShieldAlert, Clock, DollarSign, TrendingUp, TrendingDown,
@@ -136,8 +136,34 @@ export default async function OverviewPage() {
 
   const totalRiskEvals = riskMetrics.risk_classes.reduce((s, r) => s + r.total, 0);
 
+  const hasData = overview.kpis.tool_calls > 0;
+
   return (
     <div className="space-y-6">
+      {/* Onboarding banner when no data */}
+      {!hasData && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="rounded-lg bg-primary/15 p-3">
+                <ShieldCheck className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-foreground">Welcome to Governor</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  No governed actions yet. Connect your first agent to start seeing data here.
+                </p>
+              </div>
+              <Link href={"/quickstart" as Route}>
+                <Badge variant="default" className="cursor-pointer px-4 py-2 text-sm">
+                  Get Started <ArrowRight className="ml-1 h-3 w-3 inline" />
+                </Badge>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI Cards */}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {

@@ -3,7 +3,7 @@ import type { Route } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { resolveOrgId } from "@/lib/org";
-import { apiGet } from "@/lib/api";
+import { apiGet } from "@/lib/api-server";
 import { User, Shield, Building2, Key, Bot, Layers, Clock, ArrowRight } from "lucide-react";
 
 interface OverviewResponse {

@@ -41,6 +41,9 @@ importers:
       fastify:
         specifier: ^5.2.1
         version: 5.8.2
+      fastify-plugin:
+        specifier: ^5.1.0
+        version: 5.1.0
       ioredis:
         specifier: ^5.4.1
         version: 5.10.0
@@ -124,6 +127,25 @@ importers:
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(tsx@4.21.0)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/cli:
+    dependencies:
+      '@governor/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@governor/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { auditCompleteSchema } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   app.get("/events", async (request) => {
+    const orgId = resolveRequestOrg(request);
+
     const query = request.query as {
-      org_id?: string;
       agent_id?: string;
       tool_name?: string;
       decision?: "ALLOW" | "DENY" | "REQUIRE_APPROVAL";
@@ -16,7 +18,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
 
     const events = await app.prisma.auditEvent.findMany({
       where: {
-        orgId: query.org_id,
+        orgId,
         agentId: query.agent_id,
         toolName: query.tool_name,
         decision: query.decision,
@@ -30,7 +32,13 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/complete", async (request) => {
+    const orgId = resolveRequestOrg(request);
     const payload = auditCompleteSchema.parse(request.body);
+
+    const event = await app.prisma.auditEvent.findFirst({
+      where: { id: payload.request_id, orgId },
+    });
+    if (!event) throw app.httpErrors.notFound("Audit event not found");
 
     const updated = await app.prisma.auditEvent.update({
       where: { id: payload.request_id },

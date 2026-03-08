@@ -1,0 +1,23 @@
+{
+  "name": "@governor/cli",
+  "version": "0.1.0",
+  "description": "Governor CLI — AI Action Firewall command-line tools",
+  "type": "module",
+  "bin": {
+    "governor": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsx src/index.ts",
+    "test": "echo 'No tests yet'"
+  },
+  "dependencies": {
+    "@governor/sdk": "workspace:*",
+    "@governor/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.2"
+  }
+}

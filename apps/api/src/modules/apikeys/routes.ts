@@ -1,15 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { generateApiKey } from "../gateway/auth";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const apiKeyRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request) => {
-    const query = request.query as { org_id?: string };
-    if (!query.org_id) {
-      throw app.httpErrors.badRequest("org_id query parameter is required");
-    }
+    const orgId = resolveRequestOrg(request);
 
     const keys = await app.prisma.apiKey.findMany({
-      where: { orgId: query.org_id },
+      where: { orgId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -36,15 +34,14 @@ export const apiKeyRoutes: FastifyPluginAsync = async (app) => {
       expires_in_days?: number;
     };
 
-    if (!body.org_id || !body.name) {
-      throw app.httpErrors.badRequest("org_id and name are required");
+    const orgId = resolveRequestOrg(request, { fromBody: body.org_id });
+
+    if (!body.name) {
+      throw app.httpErrors.badRequest("name is required");
     }
 
-    await app.prisma.organization.upsert({
-      where: { id: body.org_id },
-      create: { id: body.org_id, name: body.org_id },
-      update: {}
-    });
+    const org = await app.prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) throw app.httpErrors.notFound("Organization not found");
 
     const { raw, prefix, hash } = generateApiKey();
 
@@ -54,7 +51,7 @@ export const apiKeyRoutes: FastifyPluginAsync = async (app) => {
 
     const key = await app.prisma.apiKey.create({
       data: {
-        orgId: body.org_id,
+        orgId,
         name: body.name,
         keyHash: hash,
         keyPrefix: prefix,
@@ -78,8 +75,9 @@ export const apiKeyRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/:keyId", async (request, reply) => {
     const params = request.params as { keyId: string };
+    const orgId = resolveRequestOrg(request);
 
-    const key = await app.prisma.apiKey.findUnique({ where: { id: params.keyId } });
+    const key = await app.prisma.apiKey.findFirst({ where: { id: params.keyId, orgId } });
     if (!key) {
       throw app.httpErrors.notFound("API key not found");
     }

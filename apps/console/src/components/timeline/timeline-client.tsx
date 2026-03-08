@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, X } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface AuditEvent {
   id: string;
@@ -26,8 +27,6 @@ interface TimelineClientProps {
   orgId: string;
   initialEvents: AuditEvent[];
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 function decisionVariant(decision: AuditEvent["decision"]) {
   if (decision === "ALLOW") return "success" as const;

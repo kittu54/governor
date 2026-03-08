@@ -546,6 +546,122 @@ export function createGovernor(config: GovernorClientConfig) {
   };
 }
 
+export interface ProtectAgentOptions {
+  org_id?: string;
+  agent_id?: string;
+  api_base_url?: string;
+  api_key?: string;
+  environment?: EnforcementMode;
+  on_error?: "throw" | "allow" | "deny";
+  on_deny?: (error: GovernorDeniedError) => void;
+  on_approval?: (error: GovernorApprovalRequiredError) => void;
+  on_enforcement_warning?: (warning: EnforcementWarning) => void;
+  auto_classify?: boolean;
+  auto_bootstrap?: boolean;
+}
+
+interface ToolDefinition {
+  name: string;
+  action?: string;
+  handler: (...args: any[]) => any;
+  costEstimator?: (...args: any[]) => number;
+}
+
+export function protectAgent(
+  tools: Record<string, (...args: any[]) => any> | ToolDefinition[],
+  options?: ProtectAgentOptions,
+) {
+  const org_id = options?.org_id ?? process.env.GOVERNOR_ORG_ID;
+  const agent_id = options?.agent_id ?? process.env.GOVERNOR_AGENT_ID;
+  const api_base_url = options?.api_base_url ?? process.env.GOVERNOR_API_BASE_URL ?? "http://localhost:4000";
+
+  if (!org_id || !agent_id) {
+    throw new Error(
+      "protectAgent requires org_id and agent_id. Set via options or GOVERNOR_ORG_ID / GOVERNOR_AGENT_ID env vars.",
+    );
+  }
+
+  const envMap: Record<string, EnforcementMode> = { DEV: "DEV", STAGING: "STAGING", PROD: "PROD" };
+  const environment = options?.environment ?? (envMap[process.env.GOVERNOR_ENVIRONMENT ?? ""] as EnforcementMode | undefined);
+
+  const governor = createGovernor({
+    api_base_url,
+    api_key: options?.api_key ?? process.env.GOVERNOR_API_KEY,
+    org_id,
+    agent_id,
+    environment,
+    on_error: options?.on_error ?? "allow",
+    on_enforcement_warning: options?.on_enforcement_warning,
+  });
+
+  if (options?.auto_bootstrap !== false) {
+    fetch(`${api_base_url.replace(/\/+$/, "")}/v1/firewall/bootstrap`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ org_id }),
+    }).catch(() => {});
+  }
+
+  const protected_tools: Record<string, (...args: any[]) => any> = {};
+
+  if (Array.isArray(tools)) {
+    for (const tool of tools) {
+      const toolName = tool.name.includes(".") ? tool.name.split(".")[0] : tool.name;
+      const toolAction = tool.action ?? (tool.name.includes(".") ? tool.name.split(".").slice(1).join(".") : "execute");
+
+      protected_tools[tool.name] = governor.wrapTool({
+        tool_name: toolName,
+        tool_action: toolAction,
+        handler: tool.handler,
+        costEstimator: tool.costEstimator,
+      });
+    }
+  } else {
+    for (const [name, handler] of Object.entries(tools)) {
+      if (typeof handler !== "function") continue;
+
+      const toolName = name.includes(".") ? name.split(".")[0] : name;
+      const toolAction = name.includes(".") ? name.split(".").slice(1).join(".") : "execute";
+
+      protected_tools[name] = governor.wrapTool({
+        tool_name: toolName,
+        tool_action: toolAction,
+        handler,
+      });
+    }
+  }
+
+  if (options?.auto_classify !== false) {
+    const toolList = Array.isArray(tools)
+      ? tools.map((t) => ({
+          tool_name: t.name.includes(".") ? t.name.split(".")[0] : t.name,
+          tool_action: t.action ?? (t.name.includes(".") ? t.name.split(".").slice(1).join(".") : "execute"),
+        }))
+      : Object.keys(tools)
+          .filter((k) => typeof tools[k] === "function")
+          .map((name) => ({
+            tool_name: name.includes(".") ? name.split(".")[0] : name,
+            tool_action: name.includes(".") ? name.split(".").slice(1).join(".") : "execute",
+          }));
+
+    fetch(`${api_base_url.replace(/\/+$/, "")}/v1/tools/auto-classify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ org_id, tools: toolList }),
+    }).catch(() => {});
+  }
+
+  return {
+    tools: protected_tools,
+    governor,
+    call: async (toolName: string, ...args: any[]) => {
+      const fn = protected_tools[toolName];
+      if (!fn) throw new Error(`Unknown tool: ${toolName}. Available: ${Object.keys(protected_tools).join(", ")}`);
+      return fn(...args);
+    },
+  };
+}
+
 export function createGovernorFromEnv() {
   const api_base_url = process.env.GOVERNOR_API_BASE_URL ?? "http://localhost:4000";
   const org_id = process.env.GOVERNOR_ORG_ID;
