@@ -14,7 +14,7 @@ import {
   UserRoundCog, CheckCircle, XCircle, Loader2, Search, Filter,
   AlertTriangle, Clock, ChevronDown, ChevronRight, ArrowUpRight, MessageSquare,
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface ApprovalAction {
   id: string;
@@ -126,9 +126,8 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
   async function handleAction(approvalId: string, action: "approve" | "deny" | "escalate", comment?: string) {
     setLoading(approvalId);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/approvals/${approvalId}/${action}`, {
+      const res = await apiFetch(`/v1/approvals/${approvalId}/${action}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           action: action.toUpperCase(),
           actor_user_id: "console_user",
@@ -160,9 +159,8 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
     if (!commentText.trim()) return;
     setLoading(approvalId);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/approvals/${approvalId}/comment`, {
+      const res = await apiFetch(`/v1/approvals/${approvalId}/comment`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "COMMENT", comment: commentText, actor_user_id: "console_user" }),
       });
       if (res.ok) {

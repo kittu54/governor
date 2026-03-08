@@ -1,21 +1,32 @@
 import { SignUp } from "@clerk/nextjs";
-import { isClerkEnabled } from "@/lib/clerk";
+import { authMode } from "@/lib/clerk";
+import { SupabaseSignUp } from "@/components/auth/supabase-auth";
 
 export default function Page() {
-  if (!isClerkEnabled) {
+  if (authMode === "clerk") {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6 text-center">
-        <div>
-          <p className="text-lg font-semibold">Clerk is disabled in local mode.</p>
-          <p className="text-sm text-muted-foreground">Set a valid NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY to enable sign-up.</p>
-        </div>
+      <div className="flex min-h-screen items-center justify-center">
+        <SignUp />
+      </div>
+    );
+  }
+
+  if (authMode === "supabase") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <SupabaseSignUp />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <SignUp />
+    <div className="flex min-h-screen items-center justify-center p-6 text-center">
+      <div>
+        <p className="text-lg font-semibold">Auth is disabled in local mode.</p>
+        <p className="text-sm text-muted-foreground">
+          Set Clerk or Supabase environment variables to enable sign-up.
+        </p>
+      </div>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import {
   Loader2, Play, History, AlertTriangle, ArrowRight,
   TrendingDown, TrendingUp, Activity,
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 const RISK_CLASSES = [
   "MONEY_MOVEMENT", "EXTERNAL_COMMUNICATION", "DATA_EXPORT", "DATA_WRITE",
@@ -99,9 +99,8 @@ export function SimulationClient({ orgId, policyVersions }: Props) {
       };
 
       try {
-        const res = await fetch(`${API_BASE_URL}/v1/simulation/simulate`, {
+        const res = await apiFetch(`/v1/simulation/simulate`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
@@ -131,9 +130,8 @@ export function SimulationClient({ orgId, policyVersions }: Props) {
       };
 
       try {
-        const res = await fetch(`${API_BASE_URL}/v1/simulation/simulate-historical`, {
+        const res = await apiFetch(`/v1/simulation/simulate-historical`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
         });
         if (!res.ok) {

@@ -1,29 +1,45 @@
 import { auth } from "@clerk/nextjs/server";
-import { isClerkEnabled } from "./clerk";
+import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
 import { API_BASE_URL } from "./api";
 
 export { API_BASE_URL };
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  if (!isClerkEnabled) {
-    const orgId = process.env.GOVERNOR_ORG_ID;
-    if (orgId) {
-      return { "x-org-id": orgId };
+  // Clerk auth
+  if (isClerkEnabled) {
+    try {
+      const { getToken } = await auth();
+      const token = await getToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["authorization"] = `Bearer ${token}`;
+      return headers;
+    } catch {
+      return {};
     }
-    return {};
   }
 
-  try {
-    const { getToken } = await auth();
-    const token = await getToken();
-    const headers: Record<string, string> = {};
-    if (token) headers["authorization"] = `Bearer ${token}`;
-    // org_id is derived from the JWT claims on the server side —
-    // do NOT send x-org-id header (ignored in production, misleading in dev).
-    return headers;
-  } catch {
-    return {};
+  // Supabase auth
+  if (isSupabaseEnabled) {
+    try {
+      const { getSupabaseServerClient } = await import("./supabase-server");
+      const supabase = await getSupabaseServerClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["authorization"] = `Bearer ${session.access_token}`;
+      }
+      return headers;
+    } catch {
+      return {};
+    }
   }
+
+  // Local mode fallback
+  const orgId = process.env.GOVERNOR_ORG_ID;
+  if (orgId) {
+    return { "x-org-id": orgId };
+  }
+  return {};
 }
 
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {

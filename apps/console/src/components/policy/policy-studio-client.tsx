@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Scale, Trash2, Loader2, Plus, ShieldCheck, AlertTriangle, Gauge, Wallet } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface PolicyRule {
   id: string;
@@ -98,9 +98,8 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
         reason: formData.get("reason")
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/policies/rules`, {
+      const response = await apiFetch(`/v1/policies/rules`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -118,7 +117,7 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
 
   function deleteRule(id: string) {
     setDeletingId(id);
-    fetch(`${API_BASE_URL}/v1/policies/rules/${id}`, { method: "DELETE" }).then((response) => {
+    apiFetch(`/v1/policies/rules/${id}`, { method: "DELETE" }).then((response) => {
       if (response.ok || response.status === 204) {
         setRules((prev) => prev.filter((r) => r.id !== id));
         showToast("Rule deleted");
@@ -139,9 +138,8 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
         amount_usd: Number(formData.get("amount_usd"))
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/policies/thresholds`, {
+      const response = await apiFetch(`/v1/policies/thresholds`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -159,7 +157,7 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
 
   function deleteThreshold(id: string) {
     setDeletingId(id);
-    fetch(`${API_BASE_URL}/v1/policies/thresholds/${id}`, { method: "DELETE" }).then((response) => {
+    apiFetch(`/v1/policies/thresholds/${id}`, { method: "DELETE" }).then((response) => {
       if (response.ok || response.status === 204) {
         setThresholds((prev) => prev.filter((t) => t.id !== id));
         showToast("Threshold deleted");
@@ -178,9 +176,8 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
         daily_limit_usd: Number(formData.get("daily_limit_usd"))
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/policies/budgets`, {
+      const response = await apiFetch(`/v1/policies/budgets`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -198,7 +195,7 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
 
   function deleteBudget(id: string) {
     setDeletingId(id);
-    fetch(`${API_BASE_URL}/v1/policies/budgets/${id}`, { method: "DELETE" }).then((response) => {
+    apiFetch(`/v1/policies/budgets/${id}`, { method: "DELETE" }).then((response) => {
       if (response.ok || response.status === 204) {
         setBudgets((prev) => prev.filter((b) => b.id !== id));
         showToast("Budget deleted");
@@ -217,9 +214,8 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
         calls_per_minute: Number(formData.get("calls_per_minute"))
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/policies/rate-limits`, {
+      const response = await apiFetch(`/v1/policies/rate-limits`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -237,7 +233,7 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
 
   function deleteRateLimit(id: string) {
     setDeletingId(id);
-    fetch(`${API_BASE_URL}/v1/policies/rate-limits/${id}`, { method: "DELETE" }).then((response) => {
+    apiFetch(`/v1/policies/rate-limits/${id}`, { method: "DELETE" }).then((response) => {
       if (response.ok || response.status === 204) {
         setRateLimits((prev) => prev.filter((r) => r.id !== id));
         showToast("Rate limit deleted");

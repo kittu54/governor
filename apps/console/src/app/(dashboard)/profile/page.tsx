@@ -22,7 +22,7 @@ interface AgentsResponse {
 
 export default async function ProfilePage() {
   const orgId = await resolveOrgId();
-  const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const { authMode } = await import("@/lib/clerk");
 
   const [overview, agentsData] = await Promise.all([
     apiGet<OverviewResponse>(`/v1/metrics/overview`).catch(() => ({
@@ -45,11 +45,11 @@ export default async function ProfilePage() {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold text-foreground">
-                  {clerkEnabled ? "Clerk User" : "Console Admin"}
+                  {authMode === "local" ? "Console Admin" : "Authenticated User"}
                 </h1>
                 <Badge variant="success">Active</Badge>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">Governor Control Tower — {clerkEnabled ? "Authenticated" : "Local Mode"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">Governor Control Tower — {authMode === "local" ? "Local Mode" : "Authenticated"}</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 <Badge variant="secondary">
                   <Shield className="mr-1 h-3 w-3" />
@@ -116,7 +116,7 @@ export default async function ProfilePage() {
             <div className="space-y-4">
               <DetailRow label="Role" value="Administrator" />
               <DetailRow label="Organization" value={orgId} mono />
-              <DetailRow label="Auth Provider" value={clerkEnabled ? "Clerk" : "Local Mode"} />
+              <DetailRow label="Auth Provider" value={authMode === "clerk" ? "Clerk" : authMode === "supabase" ? "Supabase" : "Local Mode"} />
               <DetailRow label="Agents Managed" value={String(agentsData.agents.length)} />
             </div>
           </CardContent>

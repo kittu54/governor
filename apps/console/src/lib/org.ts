@@ -1,22 +1,36 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { isClerkEnabled } from "./clerk";
+import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
 
 /**
  * Try to resolve the current org ID. Returns null if no org is selected.
  * Does NOT redirect — use for pages that handle the no-org state themselves.
  */
 export async function tryResolveOrgId(): Promise<string | null> {
-  if (!isClerkEnabled) {
-    return process.env.GOVERNOR_ORG_ID ?? null;
+  if (isClerkEnabled) {
+    try {
+      const { orgId } = await auth();
+      return orgId ?? null;
+    } catch {
+      return null;
+    }
   }
 
-  try {
-    const { orgId } = await auth();
-    return orgId ?? null;
-  } catch {
-    return null;
+  if (isSupabaseEnabled) {
+    try {
+      const { getSupabaseServerClient } = await import("./supabase-server");
+      const supabase = await getSupabaseServerClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      // Org from app_metadata, or derive from user ID
+      const meta = user.app_metadata ?? {};
+      return (meta.org_id as string) ?? (meta.organization_id as string) ?? `org_${user.id.slice(0, 8)}`;
+    } catch {
+      return null;
+    }
   }
+
+  return process.env.GOVERNOR_ORG_ID ?? null;
 }
 
 /**

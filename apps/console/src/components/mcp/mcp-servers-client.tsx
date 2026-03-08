@@ -10,7 +10,7 @@ import {
   Loader2, Plus, Server, RefreshCw, ChevronDown, ChevronRight,
   Shield, Trash2,
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface MCPServerItem {
   id: string;
@@ -73,7 +73,7 @@ export function MCPServersClient({ orgId, initialServers }: Props) {
     if (expandedId === serverId) { setExpandedId(null); return; }
     setExpandedId(serverId);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/mcp/servers/${serverId}/tools`);
+      const res = await apiFetch(`/v1/mcp/servers/${serverId}/tools`);
       if (res.ok) {
         const data = await res.json();
         setTools(data.tools);
@@ -95,9 +95,8 @@ export function MCPServersClient({ orgId, initialServers }: Props) {
         auth_type: formData.get("auth_type"),
       };
 
-      const res = await fetch(`${API_BASE_URL}/v1/mcp/servers`, {
+      const res = await apiFetch(`/v1/mcp/servers`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -122,7 +121,7 @@ export function MCPServersClient({ orgId, initialServers }: Props) {
   async function deleteServer(serverId: string) {
     setLoadingAction(serverId);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/mcp/servers/${serverId}`, { method: "DELETE" });
+      const res = await apiFetch(`/v1/mcp/servers/${serverId}`, { method: "DELETE" });
       if (res.ok) {
         setServers(prev => prev.filter(s => s.id !== serverId));
         if (expandedId === serverId) setExpandedId(null);
@@ -138,7 +137,7 @@ export function MCPServersClient({ orgId, initialServers }: Props) {
   async function syncTools(serverId: string) {
     setLoadingAction(`sync-${serverId}`);
     try {
-      const serverDetail = await fetch(`${API_BASE_URL}/v1/mcp/servers/${serverId}`);
+      const serverDetail = await apiFetch(`/v1/mcp/servers/${serverId}`);
       if (!serverDetail.ok) { showToast("Failed to load server", "error"); return; }
       const serverData = await serverDetail.json();
 
@@ -148,9 +147,8 @@ export function MCPServersClient({ orgId, initialServers }: Props) {
         { name: "call_tool", description: "Execute a tool on the server" },
       ];
 
-      const res = await fetch(`${API_BASE_URL}/v1/mcp/servers/${serverId}/sync`, {
+      const res = await apiFetch(`/v1/mcp/servers/${serverId}/sync`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ tools: sampleTools }),
       });
 

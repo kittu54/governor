@@ -12,7 +12,7 @@ import {
   Zap, Search, Filter, ShieldCheck, ShieldAlert, ShieldX, Clock,
   ArrowUpRight, ChevronLeft, ChevronRight, RefreshCw,
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface ActionItem {
   id: string;
@@ -103,7 +103,7 @@ export function ActionExplorerClient({ initialActions, initialTotal, initialStat
       if (riskFilter !== "ALL") params.set("risk_class", riskFilter);
       if (decisionFilter !== "ALL") params.set("decision", decisionFilter);
 
-      const res = await fetch(`${API_BASE_URL}/v1/actions?${params}`);
+      const res = await apiFetch(`/v1/actions?${params}`);
       if (res.ok) {
         const data = await res.json();
         setActions(data.actions ?? []);

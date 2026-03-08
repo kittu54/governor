@@ -52,7 +52,8 @@ interface KeysResponse {
 
 export default async function SettingsPage() {
   const orgId = await resolveOrgId();
-  const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const { authMode } = await import("@/lib/clerk");
+  const clerkEnabled = authMode === "clerk";
 
   const [usage, plans, agents, overview, keys] = await Promise.all([
     apiGet<UsageData>(`/v1/billing/usage`).catch(() => null),
