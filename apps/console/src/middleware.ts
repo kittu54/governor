@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { isClerkEnabled, isSupabaseEnabled } from "./lib/clerk";
+import { getSupabasePublicConfig } from "./lib/runtime-config";
 
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   try {
@@ -17,9 +18,36 @@ export default async function middleware(request: NextRequest, event: NextFetchE
     }
 
     if (isSupabaseEnabled) {
-      // Supabase auth is handled client-side in this deployment profile.
-      // Keep middleware pass-through to avoid edge/runtime package incompatibilities.
-      return NextResponse.next();
+      const supabaseConfig = getSupabasePublicConfig("server");
+      if (!supabaseConfig) {
+        console.error("[console] Supabase middleware enabled without valid config");
+        return NextResponse.next();
+      }
+
+      const { createServerClient } = await import("@supabase/ssr");
+      let supabaseResponse = NextResponse.next({ request });
+
+      const supabase = createServerClient(supabaseConfig.url, supabaseConfig.anonKey, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
+            supabaseResponse = NextResponse.next({ request });
+            for (const { name, value, options } of cookiesToSet) {
+              supabaseResponse.cookies.set(name, value, options);
+            }
+          },
+        },
+      });
+
+      try {
+        await supabase.auth.getUser();
+      } catch (error) {
+        console.warn("[console] Supabase middleware session refresh failed", error);
+      }
+
+      return supabaseResponse;
     }
   } catch (error) {
     console.error("[console] Middleware runtime failure", error);
