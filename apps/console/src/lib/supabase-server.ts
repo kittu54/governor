@@ -1,27 +1,21 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+export interface SupabaseServerClient {
+  auth: {
+    getSession: () => Promise<{ data: { session: { access_token?: string } | null } }>;
+    getUser: () => Promise<{ data: { user: { id: string; app_metadata?: Record<string, unknown> } | null } }>;
+  };
+}
 
-export async function getSupabaseServerClient() {
-  const cookieStore = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          for (const { name, value, options } of cookiesToSet) {
-            try {
-              cookieStore.set(name, value, options);
-            } catch {
-              // setAll can be called from Server Components where cookies
-              // are read-only. The middleware will handle refresh.
-            }
-          }
-        },
-      },
-    }
-  );
+const unsupportedServerClient: SupabaseServerClient = {
+  auth: {
+    async getSession() {
+      return { data: { session: null } };
+    },
+    async getUser() {
+      return { data: { user: null } };
+    },
+  },
+};
+
+export async function getSupabaseServerClient(): Promise<SupabaseServerClient> {
+  return unsupportedServerClient;
 }

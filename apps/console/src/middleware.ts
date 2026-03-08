@@ -4,7 +4,6 @@ import { isClerkEnabled, isSupabaseEnabled } from "./lib/clerk";
 
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   try {
-    // 1. Clerk Middleware (Dynamic Import)
     if (isClerkEnabled) {
       const { clerkMiddleware, createRouteMatcher } = await import("@clerk/nextjs/server");
       const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
@@ -17,42 +16,13 @@ export default async function middleware(request: NextRequest, event: NextFetchE
       if (res) return res;
     }
 
-    // 2. Supabase Middleware (Dynamic Import for safety)
     if (isSupabaseEnabled) {
-      const { createServerClient } = await import("@supabase/ssr");
-      let supabaseResponse = NextResponse.next({ request });
-
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            getAll() { return request.cookies.getAll(); },
-            setAll(cookiesToSet) {
-              for (const { name, value } of cookiesToSet) {
-                request.cookies.set(name, value);
-              }
-              supabaseResponse = NextResponse.next({ request });
-              for (const { name, value, options } of cookiesToSet) {
-                supabaseResponse.cookies.set(name, value, options);
-              }
-            },
-          },
-        }
-      );
-
-      // Refresh session 
-      try {
-        await supabase.auth.getUser();
-      } catch (e) {
-        // Ignore session refresh errors in middleware
-      }
-
-      return supabaseResponse;
+      // Supabase auth is handled client-side in this deployment profile.
+      // Keep middleware pass-through to avoid edge/runtime package incompatibilities.
+      return NextResponse.next();
     }
-  } catch (err) {
-    console.error("Middleware Error Caught:", err);
-    // On edge error, try to at least let the request through
+  } catch (error) {
+    console.error("[console] Middleware runtime failure", error);
     return NextResponse.next();
   }
 
@@ -61,7 +31,7 @@ export default async function middleware(request: NextRequest, event: NextFetchE
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)"
-  ]
+    "/((?!_next|[^?]*\.(?:html?|css|js(?!on)|jpe?g|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/(api|trpc)(.*)",
+  ],
 };
