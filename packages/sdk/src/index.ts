@@ -594,10 +594,14 @@ export function protectAgent(
     on_enforcement_warning: options?.on_enforcement_warning,
   });
 
+  const api_key = options?.api_key ?? process.env.GOVERNOR_API_KEY;
+  const bgHeaders: Record<string, string> = { "content-type": "application/json" };
+  if (api_key) bgHeaders["authorization"] = `Bearer ${api_key}`;
+
   if (options?.auto_bootstrap !== false) {
     fetch(`${api_base_url.replace(/\/+$/, "")}/v1/firewall/bootstrap`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: bgHeaders,
       body: JSON.stringify({ org_id }),
     }).catch(() => {});
   }
@@ -646,7 +650,7 @@ export function protectAgent(
 
     fetch(`${api_base_url.replace(/\/+$/, "")}/v1/tools/auto-classify`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: bgHeaders,
       body: JSON.stringify({ org_id, tools: toolList }),
     }).catch(() => {});
   }

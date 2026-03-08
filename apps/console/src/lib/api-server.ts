@@ -14,11 +14,12 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 
   try {
-    const { getToken, orgId } = await auth();
+    const { getToken } = await auth();
     const token = await getToken();
     const headers: Record<string, string> = {};
     if (token) headers["authorization"] = `Bearer ${token}`;
-    if (orgId) headers["x-org-id"] = orgId;
+    // org_id is derived from the JWT claims on the server side —
+    // do NOT send x-org-id header (ignored in production, misleading in dev).
     return headers;
   } catch {
     return {};

@@ -8,11 +8,20 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
     const orgId = resolveRequestOrg(request, { fromBody: payload.run.org_id });
 
     const result = await app.prisma.$transaction(async (tx) => {
-      await tx.organization.upsert({
-        where: { id: orgId },
-        create: { id: orgId, name: orgId },
-        update: {},
-      });
+      // In production, org must already exist (provisioned via Clerk or onboarding).
+      // In development/test, auto-provision for convenience.
+      if (app.config.NODE_ENV === "production") {
+        const org = await tx.organization.findUnique({ where: { id: orgId } });
+        if (!org) {
+          throw Object.assign(new Error("Organization not found. Provision via Clerk or onboarding first."), { statusCode: 404 });
+        }
+      } else {
+        await tx.organization.upsert({
+          where: { id: orgId },
+          create: { id: orgId, name: orgId },
+          update: {},
+        });
+      }
 
       await tx.agent.upsert({
         where: { id: payload.run.agent_id },

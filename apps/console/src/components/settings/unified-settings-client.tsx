@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, useMemo, lazy, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -158,22 +158,16 @@ function LogoutButton({ clerkEnabled }: { clerkEnabled: boolean }) {
 /* ─── General Tab ────────────────────────────────────────── */
 
 function GeneralTab({ orgId, apiBaseUrl, clerkEnabled }: { orgId: string; apiBaseUrl: string; clerkEnabled: boolean }) {
-  const [liveTimeline, setLiveTimeline] = useState(true);
-  const [sseStreaming, setSseStreaming] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
+  const storedSettings = useMemo(() => {
     try {
-      const stored = localStorage.getItem("governor_settings");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (typeof parsed.liveTimeline === "boolean") setLiveTimeline(parsed.liveTimeline);
-        if (typeof parsed.sseStreaming === "boolean") setSseStreaming(parsed.sseStreaming);
-        if (typeof parsed.autoRefresh === "boolean") setAutoRefresh(parsed.autoRefresh);
-      }
-    } catch { }
+      const stored = typeof window !== "undefined" ? localStorage.getItem("governor_settings") : null;
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
   }, []);
+  const [liveTimeline, setLiveTimeline] = useState(storedSettings.liveTimeline ?? true);
+  const [sseStreaming, setSseStreaming] = useState(storedSettings.sseStreaming ?? true);
+  const [autoRefresh, setAutoRefresh] = useState(storedSettings.autoRefresh ?? true);
+  const [saved, setSaved] = useState(false);
 
   function persist(updates: Record<string, boolean>) {
     const current = { liveTimeline, sseStreaming, autoRefresh, ...updates };
@@ -300,7 +294,7 @@ function ProfileTab({ orgId, clerkEnabled, agents, overview }: { orgId: string; 
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Your Agents</CardTitle>
-              <a href="/agents" className="flex items-center gap-1 text-sm text-primary hover:underline">View all <ArrowRight className="h-3 w-3" /></a>
+              <Link href="/agents" className="flex items-center gap-1 text-sm text-primary hover:underline">View all <ArrowRight className="h-3 w-3" /></Link>
             </div>
           </CardHeader>
           <CardContent>
