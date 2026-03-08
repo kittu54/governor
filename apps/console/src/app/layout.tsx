@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { isClerkEnabled } from "@/lib/clerk";
 import "./globals.css";
 
@@ -8,7 +7,7 @@ export const metadata: Metadata = {
   description: "AI Governance Control Tower for tool-using AI agents"
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const document = (
     <html lang="en">
       <body>{children}</body>
@@ -18,6 +17,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   if (!isClerkEnabled) {
     return document;
   }
+
+  const { ClerkProvider } = await import("@clerk/nextjs");
 
   return (
     <ClerkProvider>

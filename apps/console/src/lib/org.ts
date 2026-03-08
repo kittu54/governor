@@ -1,4 +1,3 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
 
@@ -9,6 +8,7 @@ import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
 export async function tryResolveOrgId(): Promise<string | null> {
   if (isClerkEnabled) {
     try {
+      const { auth } = await import("@clerk/nextjs/server");
       const { orgId } = await auth();
       return orgId ?? null;
     } catch {

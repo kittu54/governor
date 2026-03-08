@@ -1,15 +1,9 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 import { isClerkEnabled, isSupabaseEnabled } from "./lib/clerk";
+import { createServerClient } from "@supabase/ssr";
 
-const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
-
-const protectedMiddleware = clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
-  }
-});
+// We don't eagerly call clerkMiddleware here anymore to prevent crashes when env vars are missing
 
 function supabaseMiddleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -49,8 +43,15 @@ function supabaseMiddleware(request: NextRequest) {
   return supabaseResponse;
 }
 
-export default function middleware(request: NextRequest, event: NextFetchEvent) {
+export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (isClerkEnabled) {
+    const { clerkMiddleware, createRouteMatcher } = await import("@clerk/nextjs/server");
+    const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+    const protectedMiddleware = clerkMiddleware(async (auth, req) => {
+      if (!isPublicRoute(req)) {
+        await auth.protect();
+      }
+    });
     return protectedMiddleware(request, event);
   }
 

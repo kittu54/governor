@@ -1,6 +1,13 @@
 "use client";
 
-import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import dynamic from "next/dynamic";
+
+const OrganizationSwitcher = dynamic(() => import("@clerk/nextjs").then((mod) => mod.OrganizationSwitcher), {
+  ssr: false,
+});
+const UserButton = dynamic(() => import("@clerk/nextjs").then((mod) => mod.UserButton), {
+  ssr: false,
+});
 import { getClerkModeLabel, authMode } from "@/lib/clerk";
 import { Badge } from "@/components/ui/badge";
 import { SupabaseUserMenu } from "@/components/auth/supabase-user-menu";

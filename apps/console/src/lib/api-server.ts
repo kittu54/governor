@@ -1,4 +1,3 @@
-import { auth } from "@clerk/nextjs/server";
 import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
 import { API_BASE_URL } from "./api";
 
@@ -8,6 +7,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   // Clerk auth
   if (isClerkEnabled) {
     try {
+      const { auth } = await import("@clerk/nextjs/server");
       const { getToken } = await auth();
       const token = await getToken();
       const headers: Record<string, string> = {};

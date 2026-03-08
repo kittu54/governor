@@ -1,9 +1,9 @@
-import { SignIn } from "@clerk/nextjs";
 import { authMode } from "@/lib/clerk";
 import { SupabaseSignIn } from "@/components/auth/supabase-auth";
 
-export default function Page() {
+export default async function Page() {
   if (authMode === "clerk") {
+    const { SignIn } = await import("@clerk/nextjs");
     return (
       <div className="flex min-h-screen items-center justify-center">
         <SignIn />
