@@ -43,6 +43,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @governor/api prisma:generate
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Build
         run: pnpm build
 

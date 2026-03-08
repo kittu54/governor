@@ -416,6 +416,89 @@ describe("Auth — production mode parametric 401", () => {
   }
 });
 
+describe("Auth — production mode additional routes 401", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    app = await buildApp({
+      prisma: new FakePrisma() as any,
+      redis: new FakeRedis() as any,
+      eventBus: createEventBus(),
+      config: buildTestConfig("production"),
+    });
+  });
+
+  const additionalProtectedRoutes = [
+    { method: "GET" as const, url: "/v1/approvals" },
+    { method: "GET" as const, url: "/v1/audit/events" },
+    { method: "GET" as const, url: "/v1/tools" },
+    { method: "GET" as const, url: "/v1/metrics/overview" },
+    { method: "GET" as const, url: "/v1/webhooks" },
+    { method: "POST" as const, url: "/v1/tools/classify-risk" },
+    { method: "POST" as const, url: "/v1/gateway/check" },
+    { method: "GET" as const, url: "/v1/onboarding/status" },
+  ];
+
+  for (const route of additionalProtectedRoutes) {
+    it(`${route.method} ${route.url} returns 401 without auth`, async () => {
+      const res = await app.inject({
+        method: route.method,
+        url: route.url,
+        ...(route.method === "POST"
+          ? { payload: { tool_name: "http", tool_action: "GET" } }
+          : {}),
+      });
+      expect(res.statusCode).toBe(401);
+    });
+  }
+});
+
+describe("Auth — API key auth resolves org without body org_id in production", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    app = await buildApp({
+      prisma: new FakePrisma() as any,
+      redis: new FakeRedis() as any,
+      eventBus: createEventBus(),
+      config: buildTestConfig("production"),
+    });
+  });
+
+  it("API key auth works and resolves org_id from key (no body org_id needed for org resolution)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/evaluate",
+      headers: { authorization: `Bearer ${TEST_API_KEY}` },
+      payload: {
+        org_id: TEST_ORG_ID,
+        agent_id: "agent_1",
+        tool_name: "http",
+        tool_action: "GET",
+        cost_estimate_usd: 0,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().decision).toBeDefined();
+  });
+
+  it("rejects mismatched org_id with 403 even via Bearer token", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/evaluate",
+      headers: { authorization: `Bearer ${TEST_API_KEY}` },
+      payload: {
+        org_id: OTHER_ORG_ID,
+        agent_id: "agent_1",
+        tool_name: "http",
+        tool_action: "GET",
+        cost_estimate_usd: 0,
+      },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 describe("Auth — classify-risk mismatch protection", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
 

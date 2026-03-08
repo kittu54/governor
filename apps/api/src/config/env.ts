@@ -14,5 +14,20 @@ const envSchema = z.object({
 export type EnvConfig = z.infer<typeof envSchema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): EnvConfig {
-  return envSchema.parse(source);
+  const config = envSchema.parse(source);
+
+  // Production safety checks
+  if (config.NODE_ENV === "production") {
+    if (config.CORS_ORIGIN === "*") {
+      throw new Error("CORS_ORIGIN=* is not allowed in production. Set an explicit allowlist.");
+    }
+    if (!config.CLERK_SECRET_KEY) {
+      console.warn(
+        "[governor] WARNING: CLERK_SECRET_KEY is not set in production. " +
+        "Only API key auth will work — Clerk JWT auth will be unavailable."
+      );
+    }
+  }
+
+  return config;
 }
