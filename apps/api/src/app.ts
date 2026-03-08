@@ -1,3 +1,5 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -5,6 +7,7 @@ import sensible from "@fastify/sensible";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import { ZodError } from "zod";
+import type { FastifyInstance } from "fastify";
 import { loadEnv, type EnvConfig } from "./config/env.js";
 import { createPrismaClient } from "./lib/prisma.js";
 import { createRedisClient, NullRedis } from "./lib/redis.js";
@@ -80,7 +83,7 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
 
   app.get("/health", async () => ({ ok: true, timestamp: new Date().toISOString() }));
 
-  app.get("/ready", async (request, reply) => {
+  app.get("/ready", async (_request, reply) => {
     const checks: Record<string, boolean> = {};
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -114,4 +117,34 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
   });
 
   return app;
+}
+
+let cachedApp: Promise<FastifyInstance> | null = null;
+
+async function getServerlessApp(): Promise<FastifyInstance> {
+  if (!cachedApp) {
+    cachedApp = buildApp();
+  }
+
+  const app = await cachedApp;
+  await app.ready();
+  return app;
+}
+
+/**
+ * Vercel Node.js Serverless entrypoint.
+ * Vercel expects the default export from this module to be a request handler.
+ */
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  try {
+    const app = await getServerlessApp();
+    app.server.emit("request", req, res);
+  } catch (error) {
+    console.error("[governor-api] Serverless handler bootstrap failed", error);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+    }
+    res.end(JSON.stringify({ error: "Server bootstrap failure" }));
+  }
 }
