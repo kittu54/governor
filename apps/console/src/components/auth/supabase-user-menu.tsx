@@ -4,29 +4,45 @@ import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
-import type { User } from "@supabase/supabase-js";
+
+interface SupabaseUserLike {
+  email?: string | null;
+}
 
 export function SupabaseUserMenu() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SupabaseUserLike | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+
+    async function loadUser() {
+      try {
+        const result = await supabase.auth.getUser();
+        setUser(result.data.user ?? null);
+      } catch (error) {
+        console.warn("[console] Failed to load Supabase user", error);
+        setUser(null);
+      }
+    }
+
+    void loadUser();
   }, []);
 
   async function handleSignOut() {
     const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn("[console] Supabase sign-out failed", error);
+    }
     router.push("/sign-in" as Route);
     router.refresh();
   }
 
   return (
     <div className="flex items-center gap-3">
-      {user && (
-        <span className="text-xs text-muted-foreground">{user.email}</span>
-      )}
+      {user && <span className="text-xs text-muted-foreground">{user.email}</span>}
       <button
         onClick={handleSignOut}
         className="rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
