@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Globe, Database, Shield, Bell, Palette, Check } from "lucide-react";
@@ -32,22 +32,16 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function SettingsClient({ orgId, apiBaseUrl, clerkEnabled }: SettingsClientProps) {
-  const [liveTimeline, setLiveTimeline] = useState(true);
-  const [sseStreaming, setSseStreaming] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
+  const storedSettings = useMemo(() => {
     try {
-      const stored = localStorage.getItem("governor_settings");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (typeof parsed.liveTimeline === "boolean") setLiveTimeline(parsed.liveTimeline);
-        if (typeof parsed.sseStreaming === "boolean") setSseStreaming(parsed.sseStreaming);
-        if (typeof parsed.autoRefresh === "boolean") setAutoRefresh(parsed.autoRefresh);
-      }
-    } catch {}
+      const stored = typeof window !== "undefined" ? localStorage.getItem("governor_settings") : null;
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
   }, []);
+  const [liveTimeline, setLiveTimeline] = useState(storedSettings.liveTimeline ?? true);
+  const [sseStreaming, setSseStreaming] = useState(storedSettings.sseStreaming ?? true);
+  const [autoRefresh, setAutoRefresh] = useState(storedSettings.autoRefresh ?? true);
+  const [saved, setSaved] = useState(false);
 
   function persist(updates: Record<string, boolean>) {
     const current = { liveTimeline, sseStreaming, autoRefresh, ...updates };
