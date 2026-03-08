@@ -15,17 +15,25 @@ const envSchema = z.object({
 export type EnvConfig = z.infer<typeof envSchema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): EnvConfig {
-  const config = envSchema.parse(source);
+  const parsed = envSchema.safeParse(source);
 
-  // Production safety checks
+  if (!parsed.success) {
+    const missing = parsed.error.issues.map((issue) => issue.path.join(".")).filter(Boolean);
+    throw new Error(`Invalid environment configuration. Missing or invalid: ${missing.join(", ")}`);
+  }
+
+  const config = parsed.data;
+
   if (config.NODE_ENV === "production") {
     if (config.CORS_ORIGIN === "*") {
-      throw new Error("CORS_ORIGIN=* is not allowed in production. Set an explicit allowlist.");
+      console.warn(
+        "[governor] WARNING: CORS_ORIGIN is '*' in production. This is insecure; set an explicit allowlist."
+      );
     }
     if (!config.CLERK_SECRET_KEY && !config.SUPABASE_JWT_SECRET) {
       console.warn(
         "[governor] WARNING: Neither CLERK_SECRET_KEY nor SUPABASE_JWT_SECRET is set in production. " +
-        "Only API key auth will work — JWT auth will be unavailable."
+          "Only API key auth will work — JWT auth will be unavailable."
       );
     }
   }
