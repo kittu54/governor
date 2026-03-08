@@ -19,13 +19,26 @@ export interface AppDependencies {
   eventBus: GovernorEventBus;
 }
 
+function resolveCorsOrigin(config: EnvConfig): string | string[] | boolean {
+  if (config.NODE_ENV === "production") {
+    if (config.CORS_ORIGIN === "*") {
+      throw new Error(
+        "CORS_ORIGIN=* is not allowed in production. Set an explicit allowlist (comma-separated origins)."
+      );
+    }
+    return config.CORS_ORIGIN.split(",").map((o) => o.trim());
+  }
+  if (config.CORS_ORIGIN === "*") return true;
+  return config.CORS_ORIGIN.split(",").map((o) => o.trim());
+}
+
 export async function buildApp(overrides?: Partial<AppDependencies>) {
   const config = overrides?.config ?? loadEnv();
 
   const app = Fastify({
     logger: {
-      level: config.NODE_ENV === "development" ? "info" : "warn"
-    }
+      level: config.NODE_ENV === "development" ? "info" : "warn",
+    },
   });
 
   const prisma = overrides?.prisma ?? createPrismaClient();
@@ -39,11 +52,11 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
 
   await app.register(sensible);
   await app.register(cors, {
-    origin: config.CORS_ORIGIN,
-    credentials: true
+    origin: resolveCorsOrigin(config),
+    credentials: true,
   });
   await app.register(helmet, {
-    contentSecurityPolicy: false
+    contentSecurityPolicy: false,
   });
 
   await app.register(authPlugin);
@@ -54,18 +67,37 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
         error: "Validation Error",
         issues: error.issues.map((issue) => ({
           path: issue.path.join("."),
-          message: issue.message
-        }))
+          message: issue.message,
+        })),
       });
     }
 
     const statusCode = (error as any).statusCode ?? 500;
     reply.status(statusCode).send({
-      error: (error as Error).message ?? "Internal Server Error"
+      error: (error as Error).message ?? "Internal Server Error",
     });
   });
 
   app.get("/health", async () => ({ ok: true, timestamp: new Date().toISOString() }));
+
+  app.get("/ready", async (request, reply) => {
+    const checks: Record<string, boolean> = {};
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.database = true;
+    } catch {
+      checks.database = false;
+    }
+    try {
+      const pong = await redis.ping();
+      checks.redis = pong === "PONG";
+    } catch {
+      checks.redis = false;
+    }
+    const ok = checks.database && checks.redis;
+    return reply.status(ok ? 200 : 503).send({ ok, checks, timestamp: new Date().toISOString() });
+  });
+
   await app.register(v1Routes, { prefix: "/v1" });
 
   app.addHook("onClose", async () => {

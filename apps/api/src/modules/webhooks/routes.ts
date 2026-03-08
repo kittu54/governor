@@ -1,14 +1,14 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { createWebhookSchema, updateWebhookSchema } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const webhooksRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
-    const { org_id } = request.query as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const orgId = resolveRequestOrg(request);
 
     const webhooks = await app.prisma.webhook.findMany({
-      where: { orgId: org_id },
+      where: { orgId },
       orderBy: { createdAt: "desc" },
     });
 
@@ -27,11 +27,12 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/", async (request, reply) => {
     const payload = createWebhookSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const secret = randomBytes(32).toString("hex");
 
     const webhook = await app.prisma.webhook.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         targetUrl: payload.target_url,
         secret,
         eventTypes: payload.event_types,
@@ -41,7 +42,7 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         actorType: "USER",
         eventType: "webhook.created",
         entityType: "Webhook",
@@ -61,10 +62,10 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
     const payload = updateWebhookSchema.parse(request.body);
 
-    const existing = await app.prisma.webhook.findFirst({ where: { id, orgId: org_id } });
+    const existing = await app.prisma.webhook.findFirst({ where: { id, orgId } });
     if (!existing) return reply.status(404).send({ error: "Webhook not found" });
 
     const updated = await app.prisma.webhook.update({
@@ -86,14 +87,14 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/:id/test", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
-    const webhook = await app.prisma.webhook.findFirst({ where: { id, orgId: org_id } });
+    const webhook = await app.prisma.webhook.findFirst({ where: { id, orgId } });
     if (!webhook) return reply.status(404).send({ error: "Webhook not found" });
 
     const testPayload = {
       event: "webhook.test",
-      org_id,
+      org_id: orgId,
       timestamp: new Date().toISOString(),
       data: { message: "This is a test delivery from Governor" },
     };

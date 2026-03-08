@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { enforcementModeSchema, riskClassSchema } from "@governor/shared";
 import type { RiskClass, EnforcementMode } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 import { SimulationService } from "./service";
 
 const simulateSingleSchema = z.object({
@@ -31,8 +32,10 @@ export const simulationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/simulate", async (request, reply) => {
     const payload = simulateSingleSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const result = await service.simulateSingle({
       ...payload,
+      org_id: orgId,
       risk_class: payload.risk_class as RiskClass | undefined,
       environment: payload.environment as EnforcementMode | undefined,
     });
@@ -41,8 +44,10 @@ export const simulationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/simulate-historical", async (request, reply) => {
     const payload = simulateHistoricalSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
     const result = await service.simulateHistorical({
       ...payload,
+      org_id: orgId,
       risk_class: payload.risk_class as RiskClass | undefined,
     });
     return reply.send(result);

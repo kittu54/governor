@@ -1,8 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
+import { resolveRequestOrg, requireAuthenticated } from "../../plugins/auth";
 import { generateApiKey } from "../gateway/auth";
 
 export const onboardingRoutes: FastifyPluginAsync = async (app) => {
+  /**
+   * POST /setup — provision a new organization.
+   * In production: requires Clerk auth (userId). orgId is created here.
+   * In development: allows unauthenticated for testing.
+   */
   app.post("/setup", async (request, reply) => {
+    requireAuthenticated(request);
+
     const body = request.body as {
       org_name: string;
       user_email?: string;
@@ -29,11 +37,12 @@ export const onboardingRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
-    if (body.user_email) {
+    const userId = body.user_id ?? request.auth?.userId;
+    if (body.user_email || userId) {
       await app.prisma.user.create({
         data: {
           orgId: org.id,
-          email: body.user_email,
+          email: body.user_email ?? `${userId}@governor.local`,
           role: "owner",
         },
       });
@@ -62,6 +71,18 @@ export const onboardingRoutes: FastifyPluginAsync = async (app) => {
       data: { onboardingCompletedAt: new Date() },
     });
 
+    await app.prisma.auditLog.create({
+      data: {
+        orgId: org.id,
+        actorType: request.auth?.userId ? "USER" : "SYSTEM",
+        actorId: request.auth?.userId,
+        eventType: "org.provisioned",
+        entityType: "Organization",
+        entityId: org.id,
+        summary: `Provisioned organization "${body.org_name}" (${orgId})`,
+      },
+    });
+
     return reply.code(201).send({
       organization: {
         id: org.id,
@@ -86,11 +107,10 @@ export const onboardingRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/status", async (request) => {
-    const query = request.query as { org_id?: string };
-    if (!query.org_id) throw app.httpErrors.badRequest("org_id required");
+    const orgId = resolveRequestOrg(request);
 
     const org = await app.prisma.organization.findUnique({
-      where: { id: query.org_id },
+      where: { id: orgId },
       select: {
         id: true,
         name: true,

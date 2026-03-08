@@ -1,17 +1,17 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createToolSchema, updateToolSchema, classifyRiskSchema } from "@governor/shared";
 import { classifyToolRisk, RISK_CLASS_META, RISK_CLASSES } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const toolsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
-    const { org_id, risk_class, search } = request.query as {
-      org_id: string;
+    const orgId = resolveRequestOrg(request);
+    const { risk_class, search } = request.query as {
       risk_class?: string;
       search?: string;
     };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
 
-    const where: Record<string, unknown> = { orgId: org_id };
+    const where: Record<string, unknown> = { orgId };
     if (risk_class) where.riskClass = risk_class;
     if (search) {
       where.OR = [
@@ -46,11 +46,12 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/", async (request, reply) => {
     const payload = createToolSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
 
     const tool = await app.prisma.tool.upsert({
       where: {
         orgId_toolName_toolAction: {
-          orgId: payload.org_id,
+          orgId,
           toolName: payload.tool_name,
           toolAction: payload.tool_action,
         },
@@ -63,7 +64,7 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
         metadata: (payload.metadata ?? undefined) as any,
       },
       create: {
-        orgId: payload.org_id,
+        orgId,
         toolName: payload.tool_name,
         toolAction: payload.tool_action,
         displayName: payload.display_name,
@@ -76,7 +77,7 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         actorType: "USER",
         eventType: "tool.registered",
         entityType: "Tool",
@@ -98,10 +99,9 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
   app.patch("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const payload = updateToolSchema.parse(request.body);
-    const { org_id } = request.query as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const orgId = resolveRequestOrg(request);
 
-    const tool = await app.prisma.tool.findFirst({ where: { id, orgId: org_id } });
+    const tool = await app.prisma.tool.findFirst({ where: { id, orgId } });
     if (!tool) return reply.status(404).send({ error: "Tool not found" });
 
     const updated = await app.prisma.tool.update({
@@ -117,7 +117,7 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "USER",
         eventType: "tool.updated",
         entityType: "Tool",
@@ -138,12 +138,20 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/classify-risk", async (request, reply) => {
     const payload = classifyRiskSchema.parse(request.body);
-    const { org_id } = request.query as { org_id?: string };
+    const authOrgId = request.auth?.orgId;
+    const queryOrgId = (request.query as Record<string, string>)?.org_id;
+    const suppliedOrgId = queryOrgId;
+    if (authOrgId && suppliedOrgId && authOrgId !== suppliedOrgId) {
+      const err = new Error("org_id mismatch: supplied org_id does not match authenticated organization");
+      (err as any).statusCode = 403;
+      throw err;
+    }
+    const orgId = authOrgId ?? suppliedOrgId;
 
     let orgOverrides;
-    if (org_id) {
+    if (orgId) {
       const orgTools = await app.prisma.tool.findMany({
-        where: { orgId: org_id },
+        where: { orgId },
       });
       orgOverrides = orgTools.map((t) => ({
         toolName: t.toolName,
@@ -168,10 +176,11 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
   // ─── Batch Classify Risk ────────────────────────────────────
   app.post("/classify-risk/batch", async (request, reply) => {
-    const { tools, org_id } = request.body as {
+    const body = request.body as {
       tools: { tool_name: string; tool_action: string }[];
       org_id?: string;
     };
+    const { tools } = body;
 
     if (!Array.isArray(tools) || tools.length === 0) {
       return reply.status(400).send({ error: "tools array is required" });
@@ -180,9 +189,19 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: "Maximum 100 tools per batch" });
     }
 
+    const authOrgId = request.auth?.orgId;
+    const bodyOrgId = body.org_id;
+    const suppliedOrgId = bodyOrgId;
+    if (authOrgId && suppliedOrgId && authOrgId !== suppliedOrgId) {
+      const err = new Error("org_id mismatch: supplied org_id does not match authenticated organization");
+      (err as any).statusCode = 403;
+      throw err;
+    }
+    const orgId = authOrgId ?? suppliedOrgId;
+
     let orgOverrides: import("@governor/shared").ToolRiskMapping[] | undefined;
-    if (org_id) {
-      const orgTools = await app.prisma.tool.findMany({ where: { orgId: org_id } });
+    if (orgId) {
+      const orgTools = await app.prisma.tool.findMany({ where: { orgId } });
       orgOverrides = orgTools.map((t) => ({
         toolName: t.toolName,
         toolAction: t.toolAction,
@@ -208,12 +227,13 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/auto-classify", async (request, reply) => {
-    const { tools, org_id } = request.body as {
+    const body = request.body as {
       tools: { tool_name: string; tool_action: string; description?: string }[];
       org_id: string;
     };
+    const orgId = resolveRequestOrg(request, { fromBody: body.org_id });
+    const { tools } = body;
 
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
     if (!Array.isArray(tools) || tools.length === 0) {
       return reply.status(400).send({ error: "tools array is required" });
     }
@@ -228,7 +248,7 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
       await app.prisma.tool.upsert({
         where: {
           orgId_toolName_toolAction: {
-            orgId: org_id,
+            orgId,
             toolName: tool.tool_name,
             toolAction: tool.tool_action,
           },
@@ -239,7 +259,7 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
           description: tool.description,
         },
         create: {
-          orgId: org_id,
+          orgId,
           toolName: tool.tool_name,
           toolAction: tool.tool_action,
           riskClass: result.riskClass as any,
@@ -262,7 +282,7 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "SYSTEM",
         eventType: "tools.auto_classified",
         entityType: "Tool",

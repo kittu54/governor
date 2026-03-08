@@ -1,15 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
 import { DEFAULT_FIREWALL_RULES } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 import { FirewallService } from "./service";
 
 export const firewallRoutes: FastifyPluginAsync = async (app) => {
   const service = new FirewallService(app.prisma);
 
   app.get("/status", async (request, reply) => {
-    const { org_id } = request.query as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
-
-    const status = await service.getStatus(org_id);
+    const orgId = resolveRequestOrg(request);
+    const status = await service.getStatus(orgId);
     return reply.send(status);
   });
 
@@ -21,11 +20,11 @@ export const firewallRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/install", async (request, reply) => {
-    const { org_id } = request.body as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const body = request.body as { org_id?: string };
+    const orgId = resolveRequestOrg(request, { fromBody: body.org_id });
 
     try {
-      const result = await service.install(org_id);
+      const result = await service.install(orgId);
       return reply.status(201).send(result);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Installation failed";
@@ -34,18 +33,16 @@ export const firewallRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete("/uninstall", async (request, reply) => {
-    const { org_id } = request.query as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
-
-    const result = await service.uninstall(org_id);
+    const orgId = resolveRequestOrg(request);
+    const result = await service.uninstall(orgId);
     return reply.send(result);
   });
 
   app.post("/bootstrap", async (request, reply) => {
-    const { org_id } = request.body as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const body = request.body as { org_id?: string };
+    const orgId = resolveRequestOrg(request, { fromBody: body.org_id });
 
-    const wasInstalled = await service.ensureDefaults(org_id);
+    const wasInstalled = await service.ensureDefaults(orgId);
     return reply.send({
       bootstrapped: wasInstalled,
       message: wasInstalled

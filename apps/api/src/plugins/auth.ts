@@ -1,7 +1,54 @@
 import { verifyToken } from "@clerk/backend";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { resolveApiKey } from "../modules/gateway/auth";
+
+/** Track recently provisioned orgs to avoid repeated DB hits */
+const provisionedOrgs = new Set<string>();
+
+async function autoProvisionClerkOrg(
+  app: FastifyInstance,
+  orgId: string,
+  userId: string,
+  orgRole?: string,
+  orgSlug?: string
+): Promise<void> {
+  const cacheKey = `${orgId}:${userId}`;
+  if (provisionedOrgs.has(cacheKey)) return;
+
+  try {
+    await app.prisma.organization.upsert({
+      where: { id: orgId },
+      create: {
+        id: orgId,
+        name: orgSlug ?? orgId,
+        slug: orgSlug,
+        plan: "free",
+      },
+      update: {},
+    });
+
+    await app.prisma.user.upsert({
+      where: { orgId_email: { orgId, email: userId } },
+      create: {
+        id: userId,
+        orgId,
+        email: userId,
+        role: orgRole === "admin" || orgRole === "org:admin" ? "owner" : "member",
+      },
+      update: {},
+    });
+
+    provisionedOrgs.add(cacheKey);
+
+    if (provisionedOrgs.size > 10000) {
+      const entries = [...provisionedOrgs];
+      for (let i = 0; i < 5000; i++) provisionedOrgs.delete(entries[i]);
+    }
+  } catch (err) {
+    app.log.warn({ err, orgId, userId }, "Auto-provision failed (non-fatal)");
+  }
+}
 
 const authPluginImpl: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", async (request) => {
@@ -10,7 +57,7 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
     const authHeader = request.headers.authorization;
     const governorKey = request.headers["x-governor-key"];
 
-    // 1) API key auth (SDK / external integrations)
+    // 1) API key auth (x-governor-key header)
     if (typeof governorKey === "string" && governorKey.length > 0) {
       const apiKey = await resolveApiKey(app.prisma, request);
       if (apiKey) {
@@ -21,11 +68,10 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
       }
     }
 
-    // 2) Bearer token — could be Clerk JWT or API key
+    // 2) Bearer token — API key or Clerk JWT
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.slice(7).trim();
 
-      // Try API key first (gov_ prefix)
       if (token.startsWith("gov_")) {
         const apiKey = await resolveApiKey(app.prisma, request);
         if (apiKey) {
@@ -36,15 +82,25 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
         }
       }
 
-      // Try Clerk JWT
       if (app.config.CLERK_SECRET_KEY) {
         try {
           const verified = await verifyToken(token, {
             secretKey: app.config.CLERK_SECRET_KEY,
           });
-          request.auth.userId = verified.sub;
-          request.auth.orgId = (verified as Record<string, unknown>).org_id as string | undefined;
+          const claims = verified as Record<string, unknown>;
+          const userId = verified.sub;
+          const orgId = claims.org_id as string | undefined;
+          const orgRole = claims.org_role as string | undefined;
+          const orgSlug = claims.org_slug as string | undefined;
+
+          request.auth.userId = userId;
+          request.auth.orgId = orgId;
+          request.auth.orgRole = orgRole;
           request.auth.authMethod = "clerk";
+
+          if (orgId && userId) {
+            await autoProvisionClerkOrg(app, orgId, userId, orgRole, orgSlug);
+          }
           return;
         } catch {
           // Token invalid — fall through
@@ -52,7 +108,7 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
       }
     }
 
-    // 3) Development/test fallback: trust x-org-id / x-user-id headers
+    // 3) Development-only fallback: trust x-org-id / x-user-id headers
     if (app.config.NODE_ENV !== "production") {
       request.auth.orgId = request.headers["x-org-id"] as string | undefined;
       request.auth.userId = request.headers["x-user-id"] as string | undefined;
@@ -61,13 +117,28 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
   });
 };
 
-// fp() breaks encapsulation so the hook applies to ALL routes
 export const authPlugin = fp(authPluginImpl, { name: "auth" });
 
 /**
- * Resolve the org_id for the current request.
- * Priority: auth context > query param > body param
- * In production, auth context is REQUIRED — query/body org_id must match.
+ * Routes whose URL (without query string) can be accessed without authentication.
+ * Checked by the production auth enforcement preHandler.
+ */
+export const PUBLIC_ROUTES = new Set([
+  "/v1/billing/plans",
+  "/v1/tools/risk-classes",
+  "/health",
+  "/ready",
+]);
+
+/**
+ * Resolve the authenticated org_id for the current request.
+ *
+ * In production:
+ *   - request.auth.orgId is REQUIRED (401 if missing)
+ *   - If a supplied org_id (query/body) differs from auth: 403
+ *
+ * In development:
+ *   - Falls back to supplied org_id if no auth context
  */
 export function resolveRequestOrg(
   request: FastifyRequest,
@@ -80,14 +151,49 @@ export function resolveRequestOrg(
 
   if (authOrgId) {
     if (suppliedOrgId && suppliedOrgId !== authOrgId) {
-      throw new Error("org_id mismatch: supplied org_id does not match authenticated org");
+      const err = new Error("org_id mismatch: supplied org_id does not match authenticated organization");
+      (err as any).statusCode = 403;
+      throw err;
     }
     return authOrgId;
   }
 
+  const isProd = (request.server as any).config?.NODE_ENV === "production";
+
+  if (isProd) {
+    const err = new Error(
+      "Authentication required. Provide an API key via x-governor-key header or a Bearer token via Authorization header."
+    );
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  // Development fallback: accept supplied org_id
   if (suppliedOrgId) {
     return suppliedOrgId;
   }
 
-  throw new Error("org_id required: authenticate via API key or session, or provide org_id");
+  const err = new Error(
+    "org_id required: provide org_id query/body parameter, or authenticate via API key / Bearer token"
+  );
+  (err as any).statusCode = 400;
+  throw err;
+}
+
+/**
+ * Require that the request is authenticated (any method).
+ * Does NOT require orgId — use for endpoints like onboarding/setup where
+ * a Clerk-authenticated user may not yet have an org.
+ */
+export function requireAuthenticated(request: FastifyRequest): void {
+  if (request.auth?.authMethod) return;
+
+  const isProd = (request.server as any).config?.NODE_ENV === "production";
+  if (!isProd) return;
+
+  const err = new Error(
+    "Authentication required. Provide an API key via x-governor-key header or a Bearer token via Authorization header."
+  );
+  (err as any).statusCode = 401;
+  throw err;
 }

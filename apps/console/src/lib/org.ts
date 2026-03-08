@@ -2,16 +2,29 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isClerkEnabled } from "./clerk";
 
-export async function resolveOrgId(): Promise<string> {
+/**
+ * Try to resolve the current org ID. Returns null if no org is selected.
+ * Does NOT redirect — use for pages that handle the no-org state themselves.
+ */
+export async function tryResolveOrgId(): Promise<string | null> {
   if (!isClerkEnabled) {
-    const envOrgId = process.env.GOVERNOR_ORG_ID;
-    if (!envOrgId) {
-      redirect("/quickstart");
-    }
-    return envOrgId;
+    return process.env.GOVERNOR_ORG_ID ?? null;
   }
 
-  const { orgId } = await auth();
+  try {
+    const { orgId } = await auth();
+    return orgId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the current org ID. Redirects to /quickstart if no org is available.
+ * Use for pages that require an org context.
+ */
+export async function resolveOrgId(): Promise<string> {
+  const orgId = await tryResolveOrgId();
   if (!orgId) {
     redirect("/quickstart");
   }

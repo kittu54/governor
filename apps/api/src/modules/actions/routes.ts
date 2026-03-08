@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { RISK_CLASS_META } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const actionsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
+    const orgId = resolveRequestOrg(request);
     const {
-      org_id,
       agent_id,
       risk_class,
       decision,
@@ -16,9 +17,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       to,
     } = request.query as Record<string, string | undefined>;
 
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
-
-    const where: Record<string, unknown> = { orgId: org_id };
+    const where: Record<string, unknown> = { orgId };
     if (agent_id) where.agentId = agent_id;
     if (risk_class) where.riskClass = risk_class;
     if (decision) where.decision = decision;
@@ -94,12 +93,11 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/:id", async (request, reply) => {
+    const orgId = resolveRequestOrg(request);
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
 
     const evaluation = await app.prisma.evaluation.findFirst({
-      where: { id, orgId: org_id },
+      where: { id, orgId },
       include: {
         agent: { select: { name: true, framework: true, provider: true, environment: true, tags: true, allowedTools: true } },
         matchedPolicyVersion: {
@@ -117,7 +115,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       }),
       app.prisma.auditEvent.findFirst({
         where: {
-          orgId: org_id,
+          orgId,
           agentId: evaluation.agentId,
           toolName: evaluation.toolName,
           toolAction: evaluation.toolAction,
@@ -205,8 +203,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/stats", async (request, reply) => {
-    const { org_id, period = "24h" } = request.query as { org_id: string; period?: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const orgId = resolveRequestOrg(request);
+    const { period = "24h" } = request.query as { period?: string };
 
     const periodMap: Record<string, number> = {
       "1h": 3600000,
@@ -219,21 +217,21 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
     const [total, byDecision, byRiskClass, byAgent] = await Promise.all([
       app.prisma.evaluation.count({
-        where: { orgId: org_id, createdAt: { gte: since } },
+        where: { orgId, createdAt: { gte: since } },
       }),
       app.prisma.evaluation.groupBy({
         by: ["decision"],
-        where: { orgId: org_id, createdAt: { gte: since } },
+        where: { orgId, createdAt: { gte: since } },
         _count: true,
       }),
       app.prisma.evaluation.groupBy({
         by: ["riskClass"],
-        where: { orgId: org_id, createdAt: { gte: since } },
+        where: { orgId, createdAt: { gte: since } },
         _count: true,
       }),
       app.prisma.evaluation.groupBy({
         by: ["agentId"],
-        where: { orgId: org_id, createdAt: { gte: since } },
+        where: { orgId, createdAt: { gte: since } },
         _count: true,
         orderBy: { _count: { agentId: "desc" } },
         take: 10,

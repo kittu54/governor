@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { PUBLIC_ROUTES } from "../plugins/auth";
 import { evaluateRoutes } from "../modules/policy/evaluate-routes";
 import { policyRoutes } from "../modules/policy/routes";
 import { auditRoutes } from "../modules/audit/routes";
@@ -21,8 +22,25 @@ import { actionsRoutes } from "../modules/actions/routes";
 import { alertRoutes } from "../modules/alerts/routes";
 import { billingRoutes } from "../modules/billing/routes";
 import { onboardingRoutes } from "../modules/onboarding/routes";
+import { meRoutes } from "../modules/me/routes";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
+  // Production auth enforcement — reject unauthenticated requests
+  if (app.config.NODE_ENV === "production") {
+    app.addHook("preHandler", async (request) => {
+      if (request.auth?.authMethod) return;
+
+      const path = request.url.split("?")[0];
+      if (PUBLIC_ROUTES.has(path)) return;
+
+      const err = new Error(
+        "Authentication required. Provide an API key via x-governor-key header or a Bearer token via Authorization header."
+      );
+      (err as any).statusCode = 401;
+      throw err;
+    });
+  }
+
   await app.register(evaluateRoutes);
   await app.register(policyRoutes, { prefix: "/policies" });
   await app.register(policiesRoutes, { prefix: "/policies/v2" });
@@ -45,4 +63,5 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(alertRoutes, { prefix: "/alerts" });
   await app.register(billingRoutes, { prefix: "/billing" });
   await app.register(onboardingRoutes, { prefix: "/onboarding" });
+  await app.register(meRoutes, { prefix: "/me" });
 };

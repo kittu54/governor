@@ -9,11 +9,10 @@ const PLAN_LIMITS: Record<string, number> = {
 
 export const billingRoutes: FastifyPluginAsync = async (app) => {
   app.get("/usage", async (request) => {
-    const query = request.query as { org_id?: string };
-    if (!query.org_id) throw app.httpErrors.badRequest("org_id required");
+    const orgId = resolveRequestOrg(request);
 
     const org = await app.prisma.organization.findUnique({
-      where: { id: query.org_id },
+      where: { id: orgId },
       select: {
         plan: true,
         actionsThisMonth: true,
@@ -30,7 +29,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const period = new Date().toISOString().slice(0, 7);
 
     const usageRecord = await app.prisma.usageRecord.findUnique({
-      where: { orgId_period: { orgId: query.org_id, period } },
+      where: { orgId_period: { orgId, period } },
     });
 
     return {

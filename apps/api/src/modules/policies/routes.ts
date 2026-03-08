@@ -7,10 +7,10 @@ import { resolveRequestOrg } from "../../plugins/auth";
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── List Policies ──────────────────────────────────────────
   app.get("/", async (request, reply) => {
-    const { org_id, status } = request.query as { org_id: string; status?: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const orgId = resolveRequestOrg(request);
+    const { status } = request.query as { status?: string };
 
-    const where: Record<string, unknown> = { orgId: org_id };
+    const where: Record<string, unknown> = { orgId };
     if (status) where.status = status;
 
     const policies = await app.prisma.policy.findMany({
@@ -43,10 +43,11 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Create Policy ──────────────────────────────────────────
   app.post("/", async (request, reply) => {
     const payload = createPolicySchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
 
     const policy = await app.prisma.policy.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         name: payload.name,
         description: payload.description,
         enforcementMode: payload.enforcement_mode,
@@ -56,7 +57,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         actorType: payload.created_by ? "USER" : "SYSTEM",
         actorId: payload.created_by,
         eventType: "policy.created",
@@ -78,10 +79,10 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Get Policy Detail ──────────────────────────────────────
   app.get("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
     const policy = await app.prisma.policy.findFirst({
-      where: { id, orgId: org_id },
+      where: { id, orgId },
       include: {
         currentVersion: true,
         versions: {
@@ -129,10 +130,10 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Update Policy ──────────────────────────────────────────
   app.patch("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
     const payload = updatePolicySchema.parse(request.body);
 
-    const existing = await app.prisma.policy.findFirst({ where: { id, orgId: org_id } });
+    const existing = await app.prisma.policy.findFirst({ where: { id, orgId } });
     if (!existing) return reply.status(404).send({ error: "Policy not found" });
 
     const updated = await app.prisma.policy.update({
@@ -147,7 +148,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "USER",
         eventType: "policy.updated",
         entityType: "Policy",
@@ -168,10 +169,10 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Create Policy Version ─────────────────────────────────
   app.post("/:id/versions", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
     const payload = createPolicyVersionSchema.parse(request.body);
 
-    const policy = await app.prisma.policy.findFirst({ where: { id, orgId: org_id } });
+    const policy = await app.prisma.policy.findFirst({ where: { id, orgId } });
     if (!policy) return reply.status(404).send({ error: "Policy not found" });
 
     const compilation = compilePolicy(payload.definition as any);
@@ -203,7 +204,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: payload.created_by ? "USER" : "SYSTEM",
         actorId: payload.created_by,
         eventType: "policy_version.created",
@@ -228,9 +229,9 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── List Policy Versions ─────────────────────────────────
   app.get("/:id/versions", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
-    const policy = await app.prisma.policy.findFirst({ where: { id, orgId: org_id } });
+    const policy = await app.prisma.policy.findFirst({ where: { id, orgId } });
     if (!policy) return reply.status(404).send({ error: "Policy not found" });
 
     const versions = await app.prisma.policyVersion.findMany({
@@ -282,7 +283,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Publish Version ───────────────────────────────────────
   app.post("/versions/:versionId/publish", async (request, reply) => {
     const { versionId } = request.params as { versionId: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
     const version = await app.prisma.policyVersion.findUnique({
       where: { id: versionId },
@@ -290,7 +291,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (!version) return reply.status(404).send({ error: "Policy version not found" });
-    if (version.policy.orgId !== org_id) return reply.status(403).send({ error: "Forbidden" });
+    if (version.policy.orgId !== orgId) return reply.status(403).send({ error: "Forbidden" });
 
     await app.prisma.$transaction([
       app.prisma.policyVersion.updateMany({
@@ -312,7 +313,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "USER",
         eventType: "policy_version.published",
         entityType: "PolicyVersion",
@@ -323,7 +324,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     app.eventBus.publish({
       type: "policy.published",
-      org_id,
+      org_id: orgId,
       payload: {
         policy_id: version.policyId,
         version_id: versionId,
@@ -342,7 +343,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── Rollback Target ──────────────────────────────────────
   app.post("/versions/:versionId/rollback-target", async (request, reply) => {
     const { versionId } = request.params as { versionId: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
     const version = await app.prisma.policyVersion.findUnique({
       where: { id: versionId },
@@ -350,7 +351,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (!version) return reply.status(404).send({ error: "Policy version not found" });
-    if (version.policy.orgId !== org_id) return reply.status(403).send({ error: "Forbidden" });
+    if (version.policy.orgId !== orgId) return reply.status(403).send({ error: "Forbidden" });
 
     await app.prisma.$transaction([
       app.prisma.policyVersion.updateMany({
@@ -369,7 +370,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "USER",
         eventType: "policy_version.rollback",
         entityType: "PolicyVersion",

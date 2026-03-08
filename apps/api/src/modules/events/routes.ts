@@ -1,13 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const eventsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/stream", async (request, reply) => {
-    const orgId = (request.query as { org_id?: string }).org_id;
+    const orgId = resolveRequestOrg(request);
 
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
-      connection: "keep-alive"
+      connection: "keep-alive",
     });
 
     const writeEvent = (event: Record<string, unknown>) => {
@@ -17,9 +18,7 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     writeEvent({ type: "system.connected", at: new Date().toISOString() });
 
     const unsubscribe = app.eventBus.subscribe((event) => {
-      if (orgId && event.org_id !== orgId) {
-        return;
-      }
+      if (event.org_id !== orgId) return;
       writeEvent(event);
     });
 

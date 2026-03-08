@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { classifyToolRisk, isSensitiveRiskClass, riskClassSchema } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 import type { RiskClass } from "@governor/shared";
 
 const createMCPServerSchema = z.object({
@@ -35,11 +36,10 @@ const syncToolsSchema = z.object({
 export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── List MCP Servers ──────────────────────────────────────
   app.get("/servers", async (request, reply) => {
-    const { org_id } = request.query as { org_id: string };
-    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+    const orgId = resolveRequestOrg(request);
 
     const servers = await app.prisma.mCPServer.findMany({
-      where: { orgId: org_id },
+      where: { orgId },
       include: { _count: { select: { tools: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -63,10 +63,11 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── Create MCP Server ─────────────────────────────────────
   app.post("/servers", async (request, reply) => {
     const payload = createMCPServerSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
 
     const server = await app.prisma.mCPServer.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         name: payload.name,
         baseUrl: payload.base_url,
         description: payload.description,
@@ -77,7 +78,7 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         actorType: "SYSTEM",
         eventType: "mcp_server.created",
         entityType: "MCPServer",
@@ -99,10 +100,10 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── Get MCP Server Detail ─────────────────────────────────
   app.get("/servers/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
     const server = await app.prisma.mCPServer.findFirst({
-      where: { id, orgId: org_id },
+      where: { id, orgId },
       include: {
         tools: { orderBy: { toolName: "asc" } },
       },
@@ -135,10 +136,10 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── Update MCP Server ─────────────────────────────────────
   app.patch("/servers/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
     const payload = updateMCPServerSchema.parse(request.body);
 
-    const existing = await app.prisma.mCPServer.findFirst({ where: { id, orgId: org_id } });
+    const existing = await app.prisma.mCPServer.findFirst({ where: { id, orgId } });
     if (!existing) return reply.status(404).send({ error: "MCP server not found" });
 
     const updated = await app.prisma.mCPServer.update({
@@ -163,16 +164,16 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── Delete MCP Server ─────────────────────────────────────
   app.delete("/servers/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
-    const existing = await app.prisma.mCPServer.findFirst({ where: { id, orgId: org_id } });
+    const existing = await app.prisma.mCPServer.findFirst({ where: { id, orgId } });
     if (!existing) return reply.status(404).send({ error: "MCP server not found" });
 
     await app.prisma.mCPServer.delete({ where: { id } });
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "SYSTEM",
         eventType: "mcp_server.deleted",
         entityType: "MCPServer",
@@ -187,9 +188,9 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── Get Server Tools ──────────────────────────────────────
   app.get("/servers/:id/tools", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
 
-    const server = await app.prisma.mCPServer.findFirst({ where: { id, orgId: org_id } });
+    const server = await app.prisma.mCPServer.findFirst({ where: { id, orgId } });
     if (!server) return reply.status(404).send({ error: "MCP server not found" });
 
     const tools = await app.prisma.mCPTool.findMany({
@@ -215,10 +216,10 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   // ─── Sync Tools (discover + classify) ──────────────────────
   app.post("/servers/:id/sync", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { org_id } = request.query as { org_id: string };
+    const orgId = resolveRequestOrg(request);
     const payload = syncToolsSchema.parse(request.body);
 
-    const server = await app.prisma.mCPServer.findFirst({ where: { id, orgId: org_id } });
+    const server = await app.prisma.mCPServer.findFirst({ where: { id, orgId } });
     if (!server) return reply.status(404).send({ error: "MCP server not found" });
 
     let created = 0;
@@ -268,10 +269,10 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
       // Also register in the main Tool registry for policy evaluation
       await app.prisma.tool.upsert({
         where: {
-          orgId_toolName_toolAction: { orgId: org_id, toolName: server.name, toolAction: tool.name },
+          orgId_toolName_toolAction: { orgId, toolName: server.name, toolAction: tool.name },
         },
         create: {
-          orgId: org_id,
+          orgId,
           toolName: server.name,
           toolAction: tool.name,
           displayName: `${server.name} / ${tool.name}`,
@@ -296,7 +297,7 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: org_id,
+        orgId,
         actorType: "SYSTEM",
         eventType: "mcp_server.synced",
         entityType: "MCPServer",

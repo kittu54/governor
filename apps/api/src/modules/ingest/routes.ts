@@ -1,39 +1,38 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ingestEventsRequestSchema } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const ingestRoutes: FastifyPluginAsync = async (app) => {
   app.post("/events", async (request, reply) => {
     const payload = ingestEventsRequestSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.run.org_id });
 
     const result = await app.prisma.$transaction(async (tx) => {
       await tx.organization.upsert({
-        where: { id: payload.run.org_id },
-        create: {
-          id: payload.run.org_id,
-          name: payload.run.org_id
-        },
-        update: {}
+        where: { id: orgId },
+        create: { id: orgId, name: orgId },
+        update: {},
       });
 
       await tx.agent.upsert({
         where: { id: payload.run.agent_id },
         create: {
           id: payload.run.agent_id,
-          orgId: payload.run.org_id,
+          orgId,
           name: payload.run.agent_name ?? payload.run.agent_id,
-          status: "ACTIVE"
+          status: "ACTIVE",
         },
         update: {
-          orgId: payload.run.org_id,
-          ...(payload.run.agent_name ? { name: payload.run.agent_name } : {})
-        }
+          orgId,
+          ...(payload.run.agent_name ? { name: payload.run.agent_name } : {}),
+        },
       });
 
       const run = await tx.agentRun.upsert({
         where: { id: payload.run.run_id },
         create: {
           id: payload.run.run_id,
-          orgId: payload.run.org_id,
+          orgId,
           agentId: payload.run.agent_id,
           sessionId: payload.run.session_id,
           userId: payload.run.user_id,
@@ -47,7 +46,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           startedAt: payload.run.started_at ? new Date(payload.run.started_at) : new Date(),
           tags: payload.run.tags as any,
           metadata: (payload.run.metadata ?? undefined) as any,
-          status: "RUNNING"
+          status: "RUNNING",
         },
         update: {
           sessionId: payload.run.session_id ?? undefined,
@@ -60,8 +59,8 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           taskName: payload.run.task_name ?? undefined,
           promptHash: payload.run.prompt_hash ?? undefined,
           tags: (payload.run.tags ?? undefined) as any,
-          metadata: (payload.run.metadata ?? undefined) as any
-        }
+          metadata: (payload.run.metadata ?? undefined) as any,
+        },
       });
 
       const incomingEventIds = payload.events
@@ -70,23 +69,17 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
 
       const existing = incomingEventIds.length
         ? await tx.agentEvent.findMany({
-            where: {
-              externalEventId: {
-                in: incomingEventIds
-              }
-            },
-            select: {
-              externalEventId: true
-            }
+            where: { externalEventId: { in: incomingEventIds } },
+            select: { externalEventId: true },
           })
         : [];
 
-      const existingSet = new Set(existing.map((row) => row.externalEventId).filter((value): value is string => Boolean(value)));
+      const existingSet = new Set(
+        existing.map((row) => row.externalEventId).filter((value): value is string => Boolean(value))
+      );
 
       const createEvents = payload.events.filter((event) => {
-        if (!event.event_id) {
-          return true;
-        }
+        if (!event.event_id) return true;
         return !existingSet.has(event.event_id);
       });
 
@@ -95,7 +88,7 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           data: createEvents.map((event) => ({
             externalEventId: event.event_id,
             runId: event.run_id,
-            orgId: event.org_id,
+            orgId,
             agentId: event.agent_id,
             timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
             type: event.type,
@@ -115,8 +108,8 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
             inputPayload: event.input_payload as any,
             outputPayload: event.output_payload as any,
             parameters: event.parameters as any,
-            metadata: event.metadata as any
-          }))
+            metadata: event.metadata as any,
+          })),
         });
       }
 
@@ -125,17 +118,10 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           acc.input += event.input_tokens ?? 0;
           acc.output += event.output_tokens ?? 0;
           acc.cost += event.cost_usd ?? 0;
-          if (event.type === "TOOL_CALL") {
-            acc.toolCalls += 1;
-          }
+          if (event.type === "TOOL_CALL") acc.toolCalls += 1;
           return acc;
         },
-        {
-          input: 0,
-          output: 0,
-          cost: 0,
-          toolCalls: 0
-        }
+        { input: 0, output: 0, cost: 0, toolCalls: 0 }
       );
 
       const terminalEvent = [...createEvents]
@@ -143,15 +129,18 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         .sort((a, b) => {
           const aTime = eventTimestamp(a);
           const bTime = eventTimestamp(b);
-          if (aTime === bTime) {
-            return (a.sequence ?? 0) - (b.sequence ?? 0);
-          }
+          if (aTime === bTime) return (a.sequence ?? 0) - (b.sequence ?? 0);
           return aTime - bTime;
         })
         .at(-1);
 
-      const status = payload.finalize?.status
-        ?? (terminalEvent?.type === "RUN_FAILED" ? "ERROR" : terminalEvent?.type === "RUN_COMPLETED" ? "SUCCESS" : run.status);
+      const status =
+        payload.finalize?.status ??
+        (terminalEvent?.type === "RUN_FAILED"
+          ? "ERROR"
+          : terminalEvent?.type === "RUN_COMPLETED"
+            ? "SUCCESS"
+            : run.status);
 
       const endedAt = payload.finalize?.ended_at
         ? new Date(payload.finalize.ended_at)
@@ -159,8 +148,9 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           ? new Date(terminalEvent.timestamp)
           : run.endedAt;
 
-      const durationMs = payload.finalize?.duration_ms
-        ?? (endedAt ? Math.max(0, endedAt.getTime() - run.startedAt.getTime()) : run.durationMs);
+      const durationMs =
+        payload.finalize?.duration_ms ??
+        (endedAt ? Math.max(0, endedAt.getTime() - run.startedAt.getTime()) : run.durationMs);
 
       const updatedRun = await tx.agentRun.update({
         where: { id: payload.run.run_id },
@@ -172,8 +162,9 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           status,
           endedAt: status === "RUNNING" ? null : endedAt,
           durationMs,
-          errorMessage: payload.finalize?.error_message ?? terminalEvent?.error_message ?? run.errorMessage
-        }
+          errorMessage:
+            payload.finalize?.error_message ?? terminalEvent?.error_message ?? run.errorMessage,
+        },
       });
 
       return {
@@ -181,34 +172,27 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
         accepted: createEvents.length,
         deduped: payload.events.length - createEvents.length,
         runStatus: updatedRun.status,
-        orgId: updatedRun.orgId
+        orgId: updatedRun.orgId,
       };
     });
 
     app.eventBus.publish({
       type: "event.ingested",
       org_id: result.orgId,
-      payload: {
-        run_id: result.runId,
-        accepted_events: result.accepted,
-        deduped_events: result.deduped
-      }
+      payload: { run_id: result.runId, accepted_events: result.accepted, deduped_events: result.deduped },
     });
 
     app.eventBus.publish({
       type: "run.updated",
       org_id: result.orgId,
-      payload: {
-        run_id: result.runId,
-        status: result.runStatus
-      }
+      payload: { run_id: result.runId, status: result.runStatus },
     });
 
     return reply.code(202).send({
       run_id: result.runId,
       accepted_events: result.accepted,
       deduped_events: result.deduped,
-      run_status: result.runStatus
+      run_status: result.runStatus,
     });
   });
 };

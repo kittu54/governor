@@ -1,19 +1,17 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createAgentSchema, updateAgentSchema } from "@governor/shared";
+import { resolveRequestOrg } from "../../plugins/auth";
 
 export const agentsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request) => {
-    const query = request.query as { org_id?: string; status?: string; limit?: string };
-
-    if (!query.org_id) {
-      throw app.httpErrors.badRequest("org_id query parameter is required");
-    }
+    const orgId = resolveRequestOrg(request);
+    const query = request.query as { status?: string; limit?: string };
 
     const limit = Math.min(Number(query.limit ?? 50), 200);
 
     const agents = await app.prisma.agent.findMany({
       where: {
-        orgId: query.org_id,
+        orgId,
         ...(query.status ? { status: query.status as "ACTIVE" | "INACTIVE" | "SUSPENDED" } : {})
       },
       include: {
@@ -54,15 +52,11 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/:agentId", async (request) => {
+    const orgId = resolveRequestOrg(request);
     const params = request.params as { agentId: string };
-    const query = request.query as { org_id?: string };
-
-    if (!query.org_id) {
-      throw app.httpErrors.badRequest("org_id query parameter is required");
-    }
 
     const agent = await app.prisma.agent.findFirst({
-      where: { id: params.agentId, orgId: query.org_id },
+      where: { id: params.agentId, orgId },
       include: {
         _count: {
           select: {
@@ -81,31 +75,31 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
     const [rules, thresholds, budgets, rateLimits, recentRuns] = await Promise.all([
       app.prisma.policyRule.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           OR: [{ agentId: params.agentId }, { agentId: null }]
         },
         orderBy: { priority: "asc" }
       }),
       app.prisma.approvalThreshold.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           OR: [{ agentId: params.agentId }, { agentId: null }]
         }
       }),
       app.prisma.budgetLimit.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           OR: [{ agentId: params.agentId }, { agentId: null }]
         }
       }),
       app.prisma.rateLimitPolicy.findMany({
         where: {
-          orgId: query.org_id,
+          orgId,
           OR: [{ agentId: params.agentId }, { agentId: null }]
         }
       }),
       app.prisma.agentRun.findMany({
-        where: { agentId: params.agentId, orgId: query.org_id },
+        where: { agentId: params.agentId, orgId },
         orderBy: { startedAt: "desc" },
         take: 20
       })
@@ -148,22 +142,22 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/", async (request, reply) => {
     const payload = createAgentSchema.parse(request.body);
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
 
     const existing = await app.prisma.agent.findUnique({ where: { id: payload.id } });
     if (existing) {
       throw app.httpErrors.conflict(`Agent with ID '${payload.id}' already exists`);
     }
 
-    await app.prisma.organization.upsert({
-      where: { id: payload.org_id },
-      create: { id: payload.org_id, name: payload.org_id },
-      update: {}
-    });
+    const org = await app.prisma.organization.findUnique({ where: { id: orgId } });
+    if (!org) {
+      throw app.httpErrors.badRequest("Organization not found");
+    }
 
     const agent = await app.prisma.agent.create({
       data: {
         id: payload.id,
-        orgId: payload.org_id,
+        orgId,
         name: payload.name,
         description: payload.description,
         status: payload.status,
@@ -178,7 +172,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
 
     await app.prisma.auditLog.create({
       data: {
-        orgId: payload.org_id,
+        orgId,
         actorType: "SYSTEM",
         eventType: "agent.created",
         entityType: "Agent",
@@ -191,16 +185,12 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch("/:agentId", async (request) => {
+    const orgId = resolveRequestOrg(request);
     const params = request.params as { agentId: string };
-    const query = request.query as { org_id?: string };
     const payload = updateAgentSchema.parse(request.body);
 
-    if (!query.org_id) {
-      throw app.httpErrors.badRequest("org_id query parameter is required");
-    }
-
     const agent = await app.prisma.agent.findFirst({
-      where: { id: params.agentId, orgId: query.org_id }
+      where: { id: params.agentId, orgId }
     });
 
     if (!agent) {

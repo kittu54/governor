@@ -1,11 +1,16 @@
-import { resolveOrgId } from "@/lib/org";
+import { tryResolveOrgId } from "@/lib/org";
 import { apiGet } from "@/lib/api-server";
 import { QuickstartClient } from "@/components/quickstart/quickstart-client";
+import { SelectOrgPrompt } from "@/components/quickstart/select-org-prompt";
 
 export const metadata = { title: "Quickstart | Governor" };
 
 export default async function QuickstartPage() {
-  const orgId = await resolveOrgId();
+  const orgId = await tryResolveOrgId();
+
+  if (!orgId) {
+    return <SelectOrgPrompt />;
+  }
 
   const [keysData, firewallStatus, agentsData, actionsData] = await Promise.all([
     apiGet<{ keys: unknown[] }>(`/v1/api-keys?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ keys: [] })),

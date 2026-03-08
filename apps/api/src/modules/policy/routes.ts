@@ -17,12 +17,7 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/", async (request) => {
-    const query = request.query as { org_id?: string };
-    const orgId = query.org_id ?? request.auth.orgId;
-
-    if (!orgId) {
-      throw app.httpErrors.badRequest("org_id is required");
-    }
+    const orgId = resolveRequestOrg(request);
 
     const [rules, thresholds, budgets, rateLimits] = await Promise.all([
       app.prisma.policyRule.findMany({ where: { orgId }, orderBy: { priority: "asc" } }),
@@ -139,6 +134,7 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/simulate", async (request) => {
     const payload = evaluateRequestSchema.parse(request.body);
-    return service.evaluate(payload, { simulate: true });
+    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
+    return service.evaluate({ ...payload, org_id: orgId }, { simulate: true });
   });
 };
