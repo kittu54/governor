@@ -1,4 +1,5 @@
-import type { PolicyDefinition } from "@governor/shared";
+import type { PolicyDefinition, PolicyRuleDefinition } from "@governor/shared";
+import { RISK_CLASSES } from "@governor/shared";
 import { validateCondition } from "./conditions";
 
 /**
@@ -67,6 +68,33 @@ export function compilePolicy(definition: PolicyDefinition): CompilationResult {
     }
   }
 
+  // Check for rule conflicts: same subject_type + subject_value with opposing effects
+  const ruleSignatures = new Map<string, { effect: string; index: number }[]>();
+  for (let i = 0; i < (definition.rules?.length ?? 0); i++) {
+    const rule = definition.rules[i];
+    const sig = `${rule.subject_type}:${rule.subject_value ?? "*"}`;
+    const existing = ruleSignatures.get(sig) ?? [];
+    const hasConflict = existing.some(
+      (e) => e.effect !== rule.effect && !rule.conditions && !definition.rules[e.index].conditions
+    );
+    if (hasConflict) {
+      warnings.push(`rules[${i}]: potential conflict — same subject "${sig}" with opposing effect "${rule.effect}" and no distinguishing conditions`);
+    }
+    existing.push({ effect: rule.effect, index: i });
+    ruleSignatures.set(sig, existing);
+  }
+
+  // Validate risk-class references
+  const validRiskClasses = new Set(RISK_CLASSES);
+  for (let i = 0; i < (definition.rules?.length ?? 0); i++) {
+    const rule = definition.rules[i];
+    if (rule.subject_type === "RISK_CLASS" && rule.subject_value) {
+      if (!validRiskClasses.has(rule.subject_value as any)) {
+        errors.push(`rules[${i}]: unknown risk class "${rule.subject_value}"`);
+      }
+    }
+  }
+
   if (definition.budgets) {
     for (let i = 0; i < definition.budgets.length; i++) {
       const b = definition.budgets[i];
@@ -105,4 +133,93 @@ export function generateChecksum(definition: PolicyDefinition): string {
   const h1 = fnv1a(canonical).toString(16).padStart(8, "0");
   const h2 = fnv1a(canonical + "\x00" + canonical.length).toString(16).padStart(8, "0");
   return h1 + h2;
+}
+
+export interface PolicyDiffResult {
+  rules_added: PolicyRuleDefinition[];
+  rules_removed: PolicyRuleDefinition[];
+  rules_modified: {
+    before: PolicyRuleDefinition;
+    after: PolicyRuleDefinition;
+    changes: string[];
+  }[];
+  priority_changes: { rule_id: string; before: number; after: number }[];
+  budget_changes: boolean;
+  rate_limit_changes: boolean;
+  approval_changes: boolean;
+  summary: string;
+}
+
+/**
+ * Compute a structured diff between two policy definitions.
+ */
+export function diffPolicyDefinitions(
+  before: PolicyDefinition,
+  after: PolicyDefinition,
+): PolicyDiffResult {
+  const beforeRules = before.rules ?? [];
+  const afterRules = after.rules ?? [];
+
+  function ruleKey(r: PolicyRuleDefinition): string {
+    return r.id ?? `${r.subject_type}:${r.subject_value ?? "*"}:${r.effect}:${r.priority}`;
+  }
+
+  const beforeMap = new Map(beforeRules.map((r) => [ruleKey(r), r]));
+  const afterMap = new Map(afterRules.map((r) => [ruleKey(r), r]));
+
+  const added: PolicyRuleDefinition[] = [];
+  const removed: PolicyRuleDefinition[] = [];
+  const modified: PolicyDiffResult["rules_modified"] = [];
+  const priorityChanges: PolicyDiffResult["priority_changes"] = [];
+
+  for (const [key, rule] of afterMap) {
+    if (!beforeMap.has(key)) {
+      added.push(rule);
+    }
+  }
+
+  for (const [key, rule] of beforeMap) {
+    if (!afterMap.has(key)) {
+      removed.push(rule);
+    } else {
+      const afterRule = afterMap.get(key)!;
+      const changes: string[] = [];
+
+      if (rule.effect !== afterRule.effect) changes.push(`effect: ${rule.effect} → ${afterRule.effect}`);
+      if (rule.priority !== afterRule.priority) {
+        changes.push(`priority: ${rule.priority} → ${afterRule.priority}`);
+        priorityChanges.push({ rule_id: key, before: rule.priority, after: afterRule.priority });
+      }
+      if (rule.reason_template !== afterRule.reason_template) changes.push("reason_template changed");
+      if (JSON.stringify(rule.conditions) !== JSON.stringify(afterRule.conditions)) changes.push("conditions changed");
+      if (rule.subject_value !== afterRule.subject_value) changes.push(`subject_value: ${rule.subject_value} → ${afterRule.subject_value}`);
+
+      if (changes.length > 0) {
+        modified.push({ before: rule, after: afterRule, changes });
+      }
+    }
+  }
+
+  const budgetChanges = JSON.stringify(before.budgets) !== JSON.stringify(after.budgets);
+  const rateLimitChanges = JSON.stringify(before.rate_limits) !== JSON.stringify(after.rate_limits);
+  const approvalChanges = JSON.stringify(before.approval_requirements) !== JSON.stringify(after.approval_requirements);
+
+  const parts: string[] = [];
+  if (added.length) parts.push(`${added.length} rule(s) added`);
+  if (removed.length) parts.push(`${removed.length} rule(s) removed`);
+  if (modified.length) parts.push(`${modified.length} rule(s) modified`);
+  if (budgetChanges) parts.push("budget changes");
+  if (rateLimitChanges) parts.push("rate limit changes");
+  if (approvalChanges) parts.push("approval requirement changes");
+
+  return {
+    rules_added: added,
+    rules_removed: removed,
+    rules_modified: modified,
+    priority_changes: priorityChanges,
+    budget_changes: budgetChanges,
+    rate_limit_changes: rateLimitChanges,
+    approval_changes: approvalChanges,
+    summary: parts.length > 0 ? parts.join(", ") : "No changes",
+  };
 }

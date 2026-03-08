@@ -49,6 +49,13 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
   const [filterRisk, setFilterRisk] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [toast, setToast] = useState<{ text: string; variant: "success" | "error" } | null>(null);
+
+  function showToast(text: string, variant: "success" | "error" = "success") {
+    setToast({ text, variant });
+    setTimeout(() => setToast(null), 3000);
+  }
+
   const [classifyResult, setClassifyResult] = useState<{
     tool_name: string;
     tool_action: string;
@@ -92,8 +99,12 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
         const data = await res.json();
         setClassifyResult(data);
         setForm((prev) => ({ ...prev, risk_class: data.risk_class, is_sensitive: data.severity >= 70 }));
+      } else {
+        showToast("Auto-classify failed", "error");
       }
-    } catch {}
+    } catch {
+      showToast("Network error during classification", "error");
+    }
   }
 
   async function handleCreate() {
@@ -127,8 +138,14 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
           setShowCreate(false);
           setForm({ tool_name: "", tool_action: "", display_name: "", description: "", risk_class: "LOW_RISK", is_sensitive: false });
           setClassifyResult(null);
+          showToast("Tool registered successfully");
+        } else {
+          const err = await res.json().catch(() => null);
+          showToast(err?.message ?? "Failed to register tool", "error");
         }
-      } catch {}
+      } catch {
+        showToast("Network error registering tool", "error");
+      }
     });
   }
 
@@ -141,6 +158,16 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
 
   return (
     <div className="space-y-6">
+      {toast && (
+        <div className={`fixed right-6 top-6 z-50 animate-in fade-in slide-in-from-top-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${
+          toast.variant === "error"
+            ? "border-red-500/30 bg-red-950/80 text-red-300"
+            : "border-emerald-500/30 bg-emerald-950/80 text-emerald-300"
+        }`}>
+          {toast.text}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Tool Registry</h1>

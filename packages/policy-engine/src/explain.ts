@@ -28,7 +28,10 @@ export function explain(input: PolicyEvaluationInput): {
   lines.push(`- Risk Class: ${riskMeta.label} (severity ${riskMeta.severity}/100)`);
   lines.push(`- Cost Estimate: $${ctx.cost_estimate_usd.toFixed(2)}`);
   lines.push(`- Environment: ${ctx.environment}`);
-  lines.push(`- Sensitive: ${ctx.is_sensitive ? "Yes" : "No"}`);
+  lines.push(`- Sensitive: ${result.is_sensitive ? "Yes" : "No"}`);
+  if (result.would_deny_in_prod) {
+    lines.push(`- **Would Deny in PROD: Yes** — add an explicit ALLOW rule before promoting`);
+  }
   lines.push(``);
 
   lines.push(`### Evaluation Trace`);
@@ -93,6 +96,9 @@ function traceIcon(item: DecisionTraceItem): string {
       return "⚠️";
     case "RISK_CLASS_CHECK":
       return "🏷️";
+    case "DEV_PROD_PREVIEW":
+    case "STAGING_PROD_PREVIEW":
+      return "🔶";
     default:
       return "•";
   }

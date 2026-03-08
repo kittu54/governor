@@ -71,17 +71,11 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
   const [thresholds, setThresholds] = useState(initialPolicies.thresholds);
   const [budgets, setBudgets] = useState(initialPolicies.budgets);
   const [rateLimits, setRateLimits] = useState(initialPolicies.rate_limits);
-  const [simResult, setSimResult] = useState<{
-    decision: string;
-    trace: Array<{ code: string; message: string }>;
-  } | null>(null);
-
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPendingRule, startRuleTransition] = useTransition();
   const [isPendingThreshold, startThresholdTransition] = useTransition();
   const [isPendingBudget, startBudgetTransition] = useTransition();
   const [isPendingRateLimit, startRateLimitTransition] = useTransition();
-  const [isPendingSim, startSimTransition] = useTransition();
 
   const ruleFormRef = useRef<HTMLFormElement>(null);
   const thresholdFormRef = useRef<HTMLFormElement>(null);
@@ -255,32 +249,6 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
     });
   }
 
-  function simulate(formData: FormData) {
-    startSimTransition(async () => {
-      const payload = {
-        org_id: orgId,
-        agent_id: formData.get("agent_id"),
-        tool_name: formData.get("tool_name"),
-        tool_action: formData.get("tool_action"),
-        cost_estimate_usd: Number(formData.get("cost_estimate_usd") || 0)
-      };
-
-      const response = await fetch(`${API_BASE_URL}/v1/policies/simulate`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        showToast("Simulation failed", "error");
-        return;
-      }
-
-      const data = await response.json();
-      setSimResult({ decision: data.decision, trace: data.trace ?? [] });
-    });
-  }
-
   return (
     <div className="space-y-6">
       {/* Toast */}
@@ -297,15 +265,13 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
       {/* Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-2.5">
-                <Scale className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Policy Studio</CardTitle>
-                <CardDescription>Manage rules, thresholds, budgets, rate limits, and simulate evaluations.</CardDescription>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary/10 p-2.5">
+              <Scale className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle>Inline Governance Controls</CardTitle>
+              <CardDescription>Real-time allow/deny rules, approval thresholds, budgets, and rate limits applied to every evaluation.</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -565,48 +531,6 @@ export function PolicyStudioClient({ orgId, initialPolicies, agents = [] }: Poli
         </Card>
       </div>
 
-      {/* Simulator */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Policy Simulator</CardTitle>
-          <CardDescription>Run a virtual tool call and inspect matched rules and decision trace.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-3 md:grid-cols-5" action={simulate}>
-            <select name="agent_id" required className="h-10 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground">
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
-              ))}
-              {agents.length === 0 && <option value="">No agents</option>}
-            </select>
-            <Input name="tool_name" placeholder="tool_name" defaultValue="stripe" required />
-            <Input name="tool_action" placeholder="tool_action" defaultValue="refund" required />
-            <Input name="cost_estimate_usd" type="number" step="0.01" defaultValue="75" required />
-            <Button type="submit" disabled={isPendingSim}>
-              {isPendingSim ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running...</> : "Simulate"}
-            </Button>
-          </form>
-
-          {simResult && (
-            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
-              <div className="mb-3 text-sm font-medium">
-                Decision:{" "}
-                <Badge variant={simResult.decision === "DENY" ? "destructive" : simResult.decision === "ALLOW" ? "success" : "warning"}>
-                  {simResult.decision}
-                </Badge>
-              </div>
-              <div className="space-y-2 text-sm">
-                {simResult.trace.map((item, index) => (
-                  <div key={`${item.code}-${index}`} className="rounded-lg border border-border bg-muted/50 p-3">
-                    <p className="font-mono text-xs font-medium text-primary">{item.code}</p>
-                    <p className="mt-1 text-muted-foreground">{item.message}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

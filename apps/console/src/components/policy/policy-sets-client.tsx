@@ -119,15 +119,25 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
       if (res.ok) {
         const data = await res.json();
         setVersions(data.versions);
+      } else {
+        showToast("Failed to load versions", "error");
       }
-    } catch { /* ignore */ }
+    } catch {
+      showToast("Network error loading versions", "error");
+    }
   }
 
   async function viewVersionDetail(versionId: string) {
     try {
       const res = await fetch(`${API}/v1/policies/v2/versions/${versionId}`);
-      if (res.ok) setVersionDetail(await res.json());
-    } catch { /* ignore */ }
+      if (res.ok) {
+        setVersionDetail(await res.json());
+      } else {
+        showToast("Failed to load version detail", "error");
+      }
+    } catch {
+      showToast("Network error", "error");
+    }
   }
 
   function createPolicy(formData: FormData) {

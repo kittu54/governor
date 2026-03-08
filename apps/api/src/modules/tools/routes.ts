@@ -166,6 +166,47 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // ─── Batch Classify Risk ────────────────────────────────────
+  app.post("/classify-risk/batch", async (request, reply) => {
+    const { tools, org_id } = request.body as {
+      tools: { tool_name: string; tool_action: string }[];
+      org_id?: string;
+    };
+
+    if (!Array.isArray(tools) || tools.length === 0) {
+      return reply.status(400).send({ error: "tools array is required" });
+    }
+    if (tools.length > 100) {
+      return reply.status(400).send({ error: "Maximum 100 tools per batch" });
+    }
+
+    let orgOverrides: import("@governor/shared").ToolRiskMapping[] | undefined;
+    if (org_id) {
+      const orgTools = await app.prisma.tool.findMany({ where: { orgId: org_id } });
+      orgOverrides = orgTools.map((t) => ({
+        toolName: t.toolName,
+        toolAction: t.toolAction,
+        riskClass: t.riskClass as import("@governor/shared").RiskClass,
+        reason: `Org registry: ${t.displayName || t.toolName}`,
+      }));
+    }
+
+    const results = tools.map((tool) => {
+      const result = classifyToolRisk(tool.tool_name, tool.tool_action, orgOverrides);
+      return {
+        tool_name: tool.tool_name,
+        tool_action: tool.tool_action,
+        risk_class: result.riskClass,
+        source: result.source,
+        reason: result.reason,
+        confidence: result.confidence,
+        severity: RISK_CLASS_META[result.riskClass]?.severity ?? 0,
+      };
+    });
+
+    return reply.send({ classifications: results });
+  });
+
   app.get("/risk-classes", async (_request, reply) => {
     return reply.send({
       risk_classes: RISK_CLASSES.map((rc) => ({

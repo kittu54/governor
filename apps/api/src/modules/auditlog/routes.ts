@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { verifyAuditChain } from "./hash";
 
 export const auditLogRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
@@ -59,6 +60,7 @@ export const auditLogRoutes: FastifyPluginAsync = async (app) => {
         summary: e.summary,
         payload: e.payload,
         checksum: e.checksum,
+        previous_hash: e.previousHash,
         created_at: e.createdAt.toISOString(),
       })),
       total,
@@ -84,7 +86,19 @@ export const auditLogRoutes: FastifyPluginAsync = async (app) => {
       summary: entry.summary,
       payload: entry.payload,
       checksum: entry.checksum,
+      previous_hash: entry.previousHash,
       created_at: entry.createdAt.toISOString(),
     });
+  });
+
+  // ─── Verify Audit Chain Integrity ──────────────────────────
+  app.get("/verify", async (request, reply) => {
+    const { org_id, limit } = request.query as { org_id: string; limit?: string };
+    if (!org_id) return reply.status(400).send({ error: "org_id is required" });
+
+    const maxEntries = Math.min(Number(limit ?? 1000), 5000);
+    const result = await verifyAuditChain(app.prisma, org_id, maxEntries);
+
+    return reply.send(result);
   });
 };

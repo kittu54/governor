@@ -457,4 +457,134 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
         .sort((a, b) => a.date.localeCompare(b.date)),
     };
   });
+
+  // ─── Governance Summary ────────────────────────────────────
+  app.get("/governance", async (request) => {
+    const query = request.query as { org_id?: string; days?: string };
+    const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [evaluations, approvals, agents] = await Promise.all([
+      app.prisma.evaluation.findMany({
+        where: { orgId: query.org_id, createdAt: { gte: since } },
+        select: {
+          decision: true,
+          riskClass: true,
+          costEstimateUsd: true,
+          agentId: true,
+          toolName: true,
+          toolAction: true,
+          createdAt: true,
+        },
+      }),
+      app.prisma.approvalRequest.findMany({
+        where: { orgId: query.org_id, requestedAt: { gte: since } },
+        select: { status: true, costEstimateUsd: true },
+      }),
+      app.prisma.agent.findMany({
+        where: { orgId: query.org_id },
+        select: { id: true, status: true },
+      }),
+    ]);
+
+    const totalEvals = evaluations.length;
+    const blocked = evaluations.filter((e) => e.decision === "DENY").length;
+    const allowed = evaluations.filter((e) => e.decision === "ALLOW").length;
+    const requireApproval = evaluations.filter((e) => e.decision === "REQUIRE_APPROVAL").length;
+    const totalCost = evaluations.reduce((s, e) => s + (e.costEstimateUsd ?? 0), 0);
+    const blockedCost = evaluations.filter((e) => e.decision === "DENY").reduce((s, e) => s + (e.costEstimateUsd ?? 0), 0);
+
+    const agentDenials = new Map<string, number>();
+    for (const ev of evaluations) {
+      if (ev.decision === "DENY") {
+        agentDenials.set(ev.agentId, (agentDenials.get(ev.agentId) ?? 0) + 1);
+      }
+    }
+    const topDeniedAgents = Array.from(agentDenials.entries())
+      .map(([agent_id, denials]) => ({ agent_id, denials }))
+      .sort((a, b) => b.denials - a.denials)
+      .slice(0, 10);
+
+    const dailyMap = new Map<string, { total: number; blocked: number; allowed: number }>();
+    for (const ev of evaluations) {
+      const day = formatDay(ev.createdAt);
+      const entry = dailyMap.get(day) ?? { total: 0, blocked: 0, allowed: 0 };
+      entry.total += 1;
+      if (ev.decision === "DENY") entry.blocked += 1;
+      else if (ev.decision === "ALLOW") entry.allowed += 1;
+      dailyMap.set(day, entry);
+    }
+
+    return {
+      summary: {
+        total_evaluations: totalEvals,
+        allowed,
+        blocked,
+        require_approval: requireApproval,
+        block_rate: totalEvals > 0 ? Number(((blocked / totalEvals) * 100).toFixed(1)) : 0,
+        total_cost_governed_usd: Number(totalCost.toFixed(2)),
+        spend_prevented_usd: Number(blockedCost.toFixed(2)),
+        approval_rate: approvals.length > 0
+          ? Number(((approvals.filter((a) => a.status === "APPROVED").length / approvals.length) * 100).toFixed(1))
+          : 0,
+        active_agents: agents.filter((a) => a.status === "ACTIVE").length,
+      },
+      top_denied_agents: topDeniedAgents,
+      daily: Array.from(dailyMap.entries())
+        .map(([date, stats]) => ({ date, ...stats }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    };
+  });
+
+  // ─── Tool-Level Metrics ────────────────────────────────────
+  app.get("/tools", async (request) => {
+    const query = request.query as { org_id?: string; days?: string; limit?: string };
+    const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const limit = Math.min(Number(query.limit ?? 20), 100);
+
+    const evaluations = await app.prisma.evaluation.findMany({
+      where: { orgId: query.org_id, createdAt: { gte: since } },
+      select: { toolName: true, toolAction: true, riskClass: true, decision: true, costEstimateUsd: true },
+    });
+
+    const toolMap = new Map<string, {
+      tool_name: string;
+      tool_action: string;
+      risk_class: string | null;
+      total: number;
+      denied: number;
+      allowed: number;
+      cost: number;
+    }>();
+
+    for (const ev of evaluations) {
+      const key = `${ev.toolName}.${ev.toolAction}`;
+      const entry = toolMap.get(key) ?? {
+        tool_name: ev.toolName,
+        tool_action: ev.toolAction,
+        risk_class: ev.riskClass,
+        total: 0,
+        denied: 0,
+        allowed: 0,
+        cost: 0,
+      };
+      entry.total += 1;
+      entry.cost += ev.costEstimateUsd ?? 0;
+      if (ev.decision === "DENY") entry.denied += 1;
+      else if (ev.decision === "ALLOW") entry.allowed += 1;
+      toolMap.set(key, entry);
+    }
+
+    const tools = Array.from(toolMap.values())
+      .map((t) => ({
+        ...t,
+        cost: Number(t.cost.toFixed(2)),
+        block_rate: t.total > 0 ? Number(((t.denied / t.total) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.denied - a.denied)
+      .slice(0, limit);
+
+    return { tools };
+  });
 };

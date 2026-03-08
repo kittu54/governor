@@ -225,8 +225,24 @@ export function classifyToolRisk(
   return { riskClass: "LOW_RISK", source: "default", reason: "No risk signals detected", confidence: 0.5 };
 }
 
+/**
+ * Risk classes that are considered sensitive and require explicit ALLOW
+ * rules in PROD mode. In STAGING they produce warnings; in DEV they are
+ * logged for auditability.
+ */
+export const SENSITIVE_RISK_CLASSES: ReadonlySet<RiskClass> = new Set<RiskClass>([
+  "MONEY_MOVEMENT",
+  "DATA_EXPORT",
+  "CODE_EXECUTION",
+  "FILE_MUTATION",
+  "ADMIN_ACTION",
+  "CREDENTIAL_USE",
+  "PII_ACCESS",
+  "EXTERNAL_COMMUNICATION",
+]);
+
 export function isSensitiveRiskClass(riskClass: RiskClass): boolean {
-  return RISK_CLASS_META[riskClass].severity >= 70;
+  return SENSITIVE_RISK_CLASSES.has(riskClass);
 }
 
 export function getRiskSeverity(riskClass: RiskClass): number {

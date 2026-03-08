@@ -461,9 +461,77 @@ describe("evaluatePolicy", () => {
     expect(result.reason.length).toBeGreaterThan(0);
   });
 
-  it("returns empty warnings for DEV mode", () => {
+  it("returns warnings for DEV mode with sensitive actions", () => {
     const result = evaluatePolicy(baseInput());
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.warnings[0]).toContain("DEV notice");
+    expect(result.warnings[0]).toContain("would be DENIED in PROD");
+  });
+
+  it("returns empty warnings for DEV mode with non-sensitive actions", () => {
+    const result = evaluatePolicy(
+      baseInput({
+        ...withContext({ risk_class: "LOW_RISK", is_sensitive: false }),
+      })
+    );
     expect(result.warnings).toEqual([]);
+  });
+
+  // ─── is_sensitive / would_deny_in_prod Fields ──────────────
+  it("sets is_sensitive=true for sensitive risk classes", () => {
+    const result = evaluatePolicy(baseInput());
+    expect(result.is_sensitive).toBe(true);
+  });
+
+  it("sets is_sensitive=false for LOW_RISK", () => {
+    const result = evaluatePolicy(
+      baseInput({
+        ...withContext({ risk_class: "LOW_RISK", is_sensitive: false }),
+      })
+    );
+    expect(result.is_sensitive).toBe(false);
+  });
+
+  it("sets would_deny_in_prod=true in DEV for sensitive actions without ALLOW rule", () => {
+    const result = evaluatePolicy(
+      baseInput({
+        ...withContext({ environment: "DEV", risk_class: "CODE_EXECUTION", is_sensitive: true }),
+      })
+    );
+    expect(result.decision).toBe("ALLOW");
+    expect(result.would_deny_in_prod).toBe(true);
+  });
+
+  it("sets would_deny_in_prod=true in STAGING for sensitive actions without ALLOW rule", () => {
+    const result = evaluatePolicy(
+      baseInput({
+        ...withContext({ environment: "STAGING", risk_class: "MONEY_MOVEMENT", is_sensitive: true }),
+      })
+    );
+    expect(result.decision).toBe("ALLOW");
+    expect(result.would_deny_in_prod).toBe(true);
+  });
+
+  it("sets would_deny_in_prod=false for non-sensitive actions", () => {
+    const result = evaluatePolicy(
+      baseInput({
+        ...withContext({ environment: "DEV", risk_class: "LOW_RISK", is_sensitive: false }),
+      })
+    );
+    expect(result.would_deny_in_prod).toBe(false);
+  });
+
+  it("sets would_deny_in_prod=false when explicit ALLOW rule exists (DEV)", () => {
+    const result = evaluatePolicy(
+      baseInput({
+        ...withContext({ environment: "DEV", risk_class: "CODE_EXECUTION", is_sensitive: true }),
+        rules: [
+          { id: "r1", org_id: "org_1", agent_id: "*", tool_name: "stripe", tool_action: "refund", effect: "ALLOW", priority: 1 },
+        ],
+      })
+    );
+    expect(result.decision).toBe("ALLOW");
+    expect(result.would_deny_in_prod).toBe(false);
   });
 });
 
@@ -673,6 +741,147 @@ describe("compilePolicy", () => {
 // Explain
 // ──────────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────────
+// Enforcement Mode Consistency (per risk class)
+// ──────────────────────────────────────────────────────────────
+
+describe("enforcement mode consistency per risk class", () => {
+  const sensitiveClasses = [
+    "MONEY_MOVEMENT",
+    "DATA_EXPORT",
+    "CODE_EXECUTION",
+    "FILE_MUTATION",
+    "ADMIN_ACTION",
+    "CREDENTIAL_USE",
+    "PII_ACCESS",
+    "EXTERNAL_COMMUNICATION",
+  ] as const;
+
+  for (const rc of sensitiveClasses) {
+    describe(`risk class: ${rc}`, () => {
+      it("DEV: allows sensitive action with would_deny_in_prod=true", () => {
+        const result = evaluatePolicy(
+          baseInput({
+            ...withContext({ environment: "DEV", risk_class: rc, is_sensitive: true, tool_name: "test", tool_action: "op" }),
+          })
+        );
+        expect(result.decision).toBe("ALLOW");
+        expect(result.would_deny_in_prod).toBe(true);
+        expect(result.is_sensitive).toBe(true);
+        expect(result.warnings.length).toBeGreaterThan(0);
+        expect(result.trace.some((t) => t.code === "DEV_PROD_PREVIEW")).toBe(true);
+      });
+
+      it("STAGING: allows sensitive action with would_deny_in_prod=true and warning", () => {
+        const result = evaluatePolicy(
+          baseInput({
+            ...withContext({ environment: "STAGING", risk_class: rc, is_sensitive: true, tool_name: "test", tool_action: "op" }),
+          })
+        );
+        expect(result.decision).toBe("ALLOW");
+        expect(result.would_deny_in_prod).toBe(true);
+        expect(result.warnings.some((w) => w.includes("would be DENIED in PROD"))).toBe(true);
+        expect(result.trace.some((t) => t.code === "STAGING_PROD_PREVIEW")).toBe(true);
+      });
+
+      it("PROD: denies sensitive action by default", () => {
+        const result = evaluatePolicy(
+          baseInput({
+            ...withContext({ environment: "PROD", risk_class: rc, is_sensitive: true, tool_name: "test", tool_action: "op" }),
+          })
+        );
+        expect(result.decision).toBe("DENY");
+        expect(result.reason).toContain("Default DENY in PROD");
+        expect(result.is_sensitive).toBe(true);
+      });
+
+      it("PROD: explicit ALLOW rule overrides default deny", () => {
+        const result = evaluatePolicy(
+          baseInput({
+            ...withContext({ environment: "PROD", risk_class: rc, is_sensitive: true, tool_name: "test", tool_action: "op" }),
+            rules: [
+              { id: "allow-override", org_id: "org_1", agent_id: "*", tool_name: "test", tool_action: "op", effect: "ALLOW", priority: 1, reason: "Explicit allow" },
+            ],
+          })
+        );
+        expect(result.decision).toBe("ALLOW");
+        expect(result.matched_rule_ids).toContain("allow-override");
+      });
+
+      it("PROD: approval can override default deny", () => {
+        const result = evaluatePolicy(
+          baseInput({
+            ...withContext({ environment: "PROD", risk_class: rc, is_sensitive: true, tool_name: "test", tool_action: "op" }),
+            approval_policies: [
+              { risk_class: rc, requires_reason: true, auto_expire_seconds: 3600 },
+            ],
+          })
+        );
+        expect(result.decision).toBe("REQUIRE_APPROVAL");
+      });
+    });
+  }
+
+  it("LOW_RISK is allowed in all modes without warnings", () => {
+    for (const env of ["DEV", "STAGING", "PROD"] as const) {
+      const result = evaluatePolicy(
+        baseInput({
+          ...withContext({ environment: env, risk_class: "LOW_RISK", is_sensitive: false, tool_name: "read", tool_action: "get" }),
+        })
+      );
+      expect(result.decision).toBe("ALLOW");
+      expect(result.would_deny_in_prod).toBe(false);
+      expect(result.is_sensitive).toBe(false);
+    }
+  });
+
+  it("budget deny takes precedence over environment mode in all modes", () => {
+    for (const env of ["DEV", "STAGING", "PROD"] as const) {
+      const result = evaluatePolicy(
+        baseInput({
+          ...withContext({ environment: env, cost_estimate_usd: 200 }),
+          budgets: {
+            org: { id: "ob1", org_id: "org_1", daily_limit_usd: 100 },
+            usage: { org_spend_today_usd: 50, agent_spend_today_usd: 0 },
+          },
+        })
+      );
+      expect(result.decision).toBe("DENY");
+      expect(result.reason).toContain("budget exceeded");
+    }
+  });
+
+  it("rate limit deny takes precedence over environment mode in all modes", () => {
+    for (const env of ["DEV", "STAGING", "PROD"] as const) {
+      const result = evaluatePolicy(
+        baseInput({
+          ...withContext({ environment: env }),
+          rate_limits: {
+            policy: { id: "rl1", org_id: "org_1", calls_per_minute: 1 },
+            current_calls: 5,
+          },
+        })
+      );
+      expect(result.decision).toBe("DENY");
+      expect(result.reason).toContain("Rate limit exceeded");
+    }
+  });
+
+  it("explicit DENY rule takes precedence in all modes", () => {
+    for (const env of ["DEV", "STAGING", "PROD"] as const) {
+      const result = evaluatePolicy(
+        baseInput({
+          ...withContext({ environment: env, risk_class: "LOW_RISK", is_sensitive: false }),
+          rules: [
+            { id: "deny-all", org_id: "org_1", agent_id: "*", tool_name: "stripe", tool_action: "refund", effect: "DENY", priority: 1, reason: "Blocked" },
+          ],
+        })
+      );
+      expect(result.decision).toBe("DENY");
+    }
+  });
+});
+
 describe("explain", () => {
   it("returns human-readable explanation", () => {
     const { result, explanation } = explain(baseInput());
@@ -690,5 +899,21 @@ describe("explain", () => {
       })
     );
     expect(explanation.some((l) => l.includes("Warnings"))).toBe(true);
+  });
+
+  it("shows would_deny_in_prod notice in DEV explain for sensitive actions", () => {
+    const { result, explanation } = explain(baseInput());
+    expect(result.would_deny_in_prod).toBe(true);
+    expect(explanation.some((l) => l.includes("Would Deny in PROD"))).toBe(true);
+  });
+
+  it("does not show would_deny_in_prod for non-sensitive actions", () => {
+    const { result, explanation } = explain(
+      baseInput({
+        ...withContext({ risk_class: "LOW_RISK", is_sensitive: false }),
+      })
+    );
+    expect(result.would_deny_in_prod).toBe(false);
+    expect(explanation.some((l) => l.includes("Would Deny in PROD"))).toBe(false);
   });
 });

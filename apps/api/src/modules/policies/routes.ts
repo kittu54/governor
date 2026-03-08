@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
-import { createPolicySchema, updatePolicySchema, createPolicyVersionSchema } from "@governor/shared";
-import { compilePolicy, generateChecksum } from "@governor/policy-engine";
+import { createPolicySchema, updatePolicySchema, createPolicyVersionSchema, policyDefinitionSchema } from "@governor/shared";
+import { compilePolicy, generateChecksum, diffPolicyDefinitions } from "@governor/policy-engine";
+import type { PolicyDefinition } from "@governor/shared";
 
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── List Policies ──────────────────────────────────────────
@@ -381,7 +382,38 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  // ─── Diff Versions ────────────────────────────────────────
+  // ─── Validate Policy Definition ─────────────────────────────
+  app.post("/validate", async (request, reply) => {
+    const body = request.body as { definition?: unknown };
+    if (!body?.definition) {
+      return reply.status(400).send({ error: "definition is required" });
+    }
+
+    const parseResult = policyDefinitionSchema.safeParse(body.definition);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        valid: false,
+        schema_errors: parseResult.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+        })),
+        compilation_errors: [],
+        warnings: [],
+      });
+    }
+
+    const compilation = compilePolicy(parseResult.data as unknown as PolicyDefinition);
+
+    return reply.send({
+      valid: compilation.valid,
+      schema_errors: [],
+      compilation_errors: compilation.errors,
+      warnings: compilation.warnings,
+      checksum: compilation.valid ? compilation.checksum : undefined,
+    });
+  });
+
+  // ─── Diff Versions (structured) ────────────────────────────
   app.get("/versions/:versionId/diff/:otherVersionId", async (request, reply) => {
     const { versionId, otherVersionId } = request.params as { versionId: string; otherVersionId: string };
 
@@ -393,13 +425,16 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     if (!v1 || !v2) return reply.status(404).send({ error: "One or both versions not found" });
     if (v1.policyId !== v2.policyId) return reply.status(400).send({ error: "Versions must belong to the same policy" });
 
-    const def1 = v1.definitionJson as Record<string, unknown>;
-    const def2 = v2.definitionJson as Record<string, unknown>;
+    const def1 = v1.definitionJson as unknown as PolicyDefinition;
+    const def2 = v2.definitionJson as unknown as PolicyDefinition;
+
+    const diff = diffPolicyDefinitions(def1, def2);
 
     return reply.send({
       version_a: { id: v1.id, version_number: v1.versionNumber, checksum: v1.checksum },
       version_b: { id: v2.id, version_number: v2.versionNumber, checksum: v2.checksum },
       checksums_match: v1.checksum === v2.checksum,
+      diff,
       definition_a: def1,
       definition_b: def2,
     });

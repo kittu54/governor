@@ -169,6 +169,7 @@ model Organization {
   auditLog           AuditLog[]
   webhooks           Webhook[]
   users              User[]
+  mcpServers         MCPServer[]
 }
 
 model User {
@@ -416,6 +417,10 @@ model ApprovalPolicy {
   requiresReason       Boolean   @default(false)
   autoExpireSeconds    Int       @default(3600)
   escalationPolicyJson Json?
+  approvalChainJson    Json?
+  timeoutSeconds       Int       @default(3600)
+  autoEscalate         Boolean   @default(false)
+  autoDenyOnExpiry     Boolean   @default(true)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @default(now()) @updatedAt
 
@@ -444,6 +449,8 @@ model ApprovalRequest {
   decidedAt       DateTime?
   decidedBy       String?
   trace           Json
+  currentLevel    Int            @default(1)
+  maxLevel        Int            @default(1)
 
   organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agent           Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -503,17 +510,18 @@ model Evaluation {
 // ──────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id         String        @id @default(cuid())
-  orgId      String
-  actorType  AuditActorType
-  actorId    String?
-  eventType  String
-  entityType String
-  entityId   String?
-  summary    String
-  payload    Json?
-  checksum   String?
-  createdAt  DateTime      @default(now())
+  id           String        @id @default(cuid())
+  orgId        String
+  actorType    AuditActorType
+  actorId      String?
+  eventType    String
+  entityType   String
+  entityId     String?
+  summary      String
+  payload      Json?
+  checksum     String?
+  previousHash String?
+  createdAt    DateTime      @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -647,4 +655,55 @@ model AgentEvent {
   @@index([orgId, timestamp])
   @@index([agentId, timestamp])
   @@index([type, timestamp])
+}
+
+// ──────────────────────────────────────────────────────────────
+// MCP Server Registry
+// ──────────────────────────────────────────────────────────────
+
+enum MCPAuthType {
+  NONE
+  API_KEY
+  BEARER_TOKEN
+  OAUTH
+}
+
+model MCPServer {
+  id          String      @id @default(cuid())
+  orgId       String
+  name        String
+  baseUrl     String
+  description String?
+  authType    MCPAuthType @default(NONE)
+  isActive    Boolean     @default(true)
+  lastSyncAt  DateTime?
+  toolCount   Int         @default(0)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  tools        MCPTool[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model MCPTool {
+  id          String    @id @default(cuid())
+  serverId    String
+  toolName    String
+  description String?
+  inputSchema Json?
+  riskClass   RiskClass @default(LOW_RISK)
+  isSensitive Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  server MCPServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, toolName])
+  @@index([serverId])
 }

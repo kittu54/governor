@@ -157,7 +157,9 @@ export type TraceCode =
   | "DEFAULT_DENY"
   | "DENY"
   | "REQUIRE_APPROVAL"
-  | "ALLOW";
+  | "ALLOW"
+  | "DEV_PROD_PREVIEW"
+  | "STAGING_PROD_PREVIEW";
 
 export interface DecisionTraceItem {
   code: TraceCode | string;
@@ -236,6 +238,10 @@ export interface PolicyEvaluationResult {
   enforcement_mode: EnforcementMode;
   risk_class: RiskClass;
   duration_ms?: number;
+  /** True when the action is classified as sensitive for governance purposes. */
+  is_sensitive: boolean;
+  /** In DEV/STAGING: true if this action would be DENIED under PROD enforcement. */
+  would_deny_in_prod: boolean;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -264,6 +270,8 @@ export interface EvaluateResponse {
   warnings: string[];
   risk_class: RiskClass;
   enforcement_mode: EnforcementMode;
+  is_sensitive: boolean;
+  would_deny_in_prod: boolean;
   approval_request_id?: string;
   matched_rule_ids: string[];
   matched_policy_version_id?: string;

@@ -1,5 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
 import { approvalDecisionSchema, approvalActionSchema } from "@governor/shared";
+
+const bulkActionSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+  action: z.enum(["APPROVE", "DENY"]),
+  actor_user_id: z.string().optional(),
+  comment: z.string().optional(),
+});
 
 export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // ─── List Approvals ────────────────────────────────────────
@@ -56,6 +64,8 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         expires_at: a.expiresAt?.toISOString() ?? null,
         decided_at: a.decidedAt?.toISOString() ?? null,
         decided_by: a.decidedBy,
+        current_level: a.currentLevel,
+        max_level: a.maxLevel,
         is_expired: a.expiresAt ? a.expiresAt < new Date() && a.status === "PENDING" : false,
         sla_remaining_seconds: a.expiresAt && a.status === "PENDING"
           ? Math.max(0, Math.floor((a.expiresAt.getTime() - Date.now()) / 1000))
@@ -201,34 +211,40 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) return reply.status(404).send({ error: "Approval not found" });
     if (existing.status !== "PENDING") return reply.status(409).send({ error: "Already decided" });
 
-    const action = await app.prisma.approvalAction.create({
-      data: {
-        approvalRequestId: id,
-        actorUserId: body.actor_user_id,
-        action: "ESCALATE",
-        comment: body.comment,
-      },
-    });
-
-    await app.prisma.auditLog.create({
-      data: {
-        orgId: existing.orgId,
-        actorType: "USER",
-        actorId: body.actor_user_id,
-        eventType: "approval.escalated",
-        entityType: "ApprovalRequest",
-        entityId: id,
-        summary: `Escalated approval for ${existing.toolName}.${existing.toolAction}`,
-      },
-    });
+    const nextLevel = existing.currentLevel + 1;
+    const [, action] = await app.prisma.$transaction([
+      app.prisma.approvalRequest.update({
+        where: { id },
+        data: { currentLevel: nextLevel },
+      }),
+      app.prisma.approvalAction.create({
+        data: {
+          approvalRequestId: id,
+          actorUserId: body.actor_user_id,
+          action: "ESCALATE",
+          comment: body.comment ?? `Escalated to level ${nextLevel}`,
+        },
+      }),
+      app.prisma.auditLog.create({
+        data: {
+          orgId: existing.orgId,
+          actorType: "USER",
+          actorId: body.actor_user_id,
+          eventType: "approval.escalated",
+          entityType: "ApprovalRequest",
+          entityId: id,
+          summary: `Escalated approval for ${existing.toolName}.${existing.toolAction} to level ${nextLevel}`,
+        },
+      }),
+    ]);
 
     app.eventBus.publish({
       type: "approval.updated",
       org_id: existing.orgId,
-      payload: { id, status: "PENDING", action: "ESCALATE" },
+      payload: { id, status: "PENDING", action: "ESCALATE", level: nextLevel },
     });
 
-    return reply.send({ action_id: action.id, escalated: true });
+    return reply.send({ action_id: action.id, escalated: true, level: nextLevel });
   });
 
   // ─── Comment ───────────────────────────────────────────────
@@ -249,6 +265,65 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return reply.send({ action_id: action.id });
+  });
+
+  // ─── Bulk Action ─────────────────────────────────────────
+  app.post("/bulk", async (request, reply) => {
+    const payload = bulkActionSchema.parse(request.body);
+    const status = payload.action === "APPROVE" ? "APPROVED" : "DENIED";
+
+    const pending = await app.prisma.approvalRequest.findMany({
+      where: { id: { in: payload.ids }, status: "PENDING" },
+      select: { id: true, orgId: true, agentId: true, toolName: true, toolAction: true },
+    });
+
+    if (pending.length === 0) {
+      return reply.status(400).send({ error: "No pending approvals found for given IDs" });
+    }
+
+    const now = new Date();
+    const operations = pending.flatMap((a) => [
+      app.prisma.approvalRequest.update({
+        where: { id: a.id },
+        data: { status: status as any, decidedAt: now, decidedBy: payload.actor_user_id },
+      }),
+      app.prisma.approvalAction.create({
+        data: {
+          approvalRequestId: a.id,
+          actorUserId: payload.actor_user_id,
+          action: payload.action,
+          comment: payload.comment ?? `Bulk ${payload.action.toLowerCase()}`,
+        },
+      }),
+      app.prisma.auditLog.create({
+        data: {
+          orgId: a.orgId,
+          actorType: "USER",
+          actorId: payload.actor_user_id,
+          eventType: `approval.${payload.action.toLowerCase()}`,
+          entityType: "ApprovalRequest",
+          entityId: a.id,
+          summary: `Bulk ${payload.action} for ${a.toolName}.${a.toolAction}`,
+        },
+      }),
+    ]);
+
+    await app.prisma.$transaction(operations);
+
+    for (const a of pending) {
+      app.eventBus.publish({
+        type: "approval.updated",
+        org_id: a.orgId,
+        payload: { id: a.id, status, decided_by: payload.actor_user_id },
+      });
+    }
+
+    return reply.send({
+      processed: pending.length,
+      skipped: payload.ids.length - pending.length,
+      action: payload.action,
+      status,
+    });
   });
 };
 

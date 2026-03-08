@@ -63,9 +63,14 @@ It works with agents built on **any framework** — LangChain, CrewAI, AutoGen, 
 - **Tool Registry** — centralized catalog of tools with risk class assignments, sensitivity flags, and auto-classify.
 - **Approval Workflows** — operator-centric inbox with approve/deny/escalate/comment, evidence capture, expiry, and SLA tracking.
 - **Full Audit Trail** — immutable entity-level audit log alongside governance decision records and evaluation traces.
+- **MCP Governance** — register MCP servers, auto-discover tools, classify risk, and enforce policies across MCP tool calls.
+- **Policy Simulation** — simulate policy changes against single evaluations or historical runs to preview impact before deploying.
+- **Advanced Approval Workflows** — multi-level approval chains with per-level timeouts, auto-escalation, auto-deny on expiry, and bulk actions.
+- **Operator Analytics** — governance metrics: blocked actions, approval rates, spend prevented, top risky tools, risk distribution, and daily trends.
+- **Audit Integrity** — optional hash chaining for audit events with cryptographic verification endpoint.
 - **Webhooks** — event-driven notifications for external integrations.
 - **Telemetry Ingestion** — captures run-level and event-level data from any AI provider.
-- **Visual Console** — dashboards for operations, approvals, policy authoring, tool registry, and risk analytics.
+- **Visual Console** — dashboards for operations, approvals, policy authoring, tool registry, MCP servers, and analytics.
 
 ## How Policy Evaluation Works
 
@@ -141,19 +146,25 @@ Tools are classified by: (1) registered overrides in the tool registry, (2) defa
 ```
 governor/
 ├── apps/
-│   ├── api/              Fastify API service — governance, audit, tools, metrics, webhooks
-│   │   ├── src/modules/  Feature modules (policy, tools, approvals, audit, metrics, webhooks, etc.)
+│   ├── api/              Fastify API service — governance, audit, tools, metrics, webhooks, MCP, simulation
+│   │   ├── src/modules/  Feature modules (policy, tools, approvals, audit, metrics, mcp, simulation, etc.)
 │   │   ├── prisma/       Database schema, migrations, and seed data
 │   │   └── test/         Integration tests
 │   │
 │   └── console/          Next.js 15 visual control tower
-│       ├── src/app/      App Router pages (overview, runs, approvals, policy-studio, tools, audit, etc.)
-│       └── src/components/ UI components (layout, charts, policy, tools, approvals, audit)
+│       ├── src/app/      App Router pages (overview, runs, approvals, policy-studio, tools, mcp, audit, etc.)
+│       └── src/components/ UI components (layout, charts, policy, tools, mcp, approvals, audit)
 │
 ├── packages/
 │   ├── sdk/              Integration SDK — wrapTool, telemetry, provider adapters, error classes
-│   ├── policy-engine/    Pure TypeScript policy evaluation, conditions DSL, compile, explain
+│   ├── policy-engine/    Pure TypeScript policy evaluation, conditions DSL, compile, explain, diff
 │   └── shared/           Shared types, Zod schemas, risk taxonomy, and contracts
+│
+├── examples/
+│   ├── openai-agent/     OpenAI function-calling tools with Governor governance
+│   ├── langchain-agent/  LangChain tools with wrapLangChainTool
+│   ├── mcp-server/       MCP server dispatch with evaluate()
+│   └── internal-tool/    Internal pipeline with telemetry runs
 │
 ├── docker-compose.yml    Postgres + Redis + API + Console containers
 ├── Makefile              Bootstrap and dev lifecycle commands
@@ -474,6 +485,65 @@ Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confid
 
 #### `GET /v1/tools/risk-classes` — List all risk classes with metadata
 
+### Policy Simulation
+
+#### `POST /v1/simulation/simulate` — Simulate a policy version against a single evaluation
+
+```json
+{
+  "policy_version_id": "pv_abc",
+  "tool_name": "stripe",
+  "tool_action": "refund",
+  "agent_id": "agent_support_1",
+  "risk_class": "MONEY_MOVEMENT",
+  "cost_estimate_usd": 200,
+  "environment": "PROD"
+}
+```
+
+Returns: current decision, simulated decision, and diff.
+
+#### `POST /v1/simulation/simulate-historical` — Simulate against historical evaluations
+
+```json
+{
+  "policy_version_id": "pv_abc",
+  "lookback_hours": 168,
+  "org_id": "org_acme"
+}
+```
+
+Returns: total events, changed decisions, affected agents/tools, sample impacted runs.
+
+### Policy Validation
+
+#### `POST /v1/policies/v2/validate` — Validate a policy definition
+
+Checks for rule conflicts, missing conditions, invalid risk-class references, and duplicate priorities.
+
+### MCP Server Registry
+
+#### `POST /v1/mcp/servers` — Register an MCP server
+#### `GET /v1/mcp/servers` — List MCP servers
+#### `GET /v1/mcp/servers/:id` — Get MCP server details
+#### `PATCH /v1/mcp/servers/:id` — Update an MCP server
+#### `DELETE /v1/mcp/servers/:id` — Remove an MCP server
+#### `GET /v1/mcp/servers/:id/tools` — List tools for an MCP server
+#### `POST /v1/mcp/servers/:id/sync` — Discover and classify tools from an MCP server
+
+### Batch Risk Classification
+
+#### `POST /v1/tools/classify-risk/batch` — Classify risk for multiple tools
+
+```json
+{
+  "tools": [
+    { "tool_name": "stripe", "tool_action": "refund" },
+    { "tool_name": "gmail", "tool_action": "send" }
+  ]
+}
+```
+
 ### Legacy Policies (v1)
 
 #### `GET /v1/policies` — List rules, thresholds, budgets, rate limits
@@ -481,15 +551,15 @@ Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confid
 #### `POST /v1/policies/thresholds` — Create an approval threshold
 #### `POST /v1/policies/budgets` — Create a budget limit
 #### `POST /v1/policies/rate-limits` — Create a rate limit
-#### `POST /v1/policies/simulate` — Simulate a policy evaluation
 
 ### Approvals
 
 #### `GET /v1/approvals` — List approval requests (with agent names, risk class, evidence, actions)
 #### `POST /v1/approvals/:id/approve` — Approve with optional comment
 #### `POST /v1/approvals/:id/deny` — Deny with optional comment
-#### `POST /v1/approvals/:id/escalate` — Escalate a request
+#### `POST /v1/approvals/:id/escalate` — Escalate to next approval level
 #### `POST /v1/approvals/:id/comment` — Add a comment
+#### `POST /v1/approvals/bulk` — Bulk approve or deny (up to 100 requests)
 
 ### Audit
 
@@ -498,6 +568,9 @@ Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confid
 **Query params:** `org_id`, `event_type`, `entity_type`, `entity_id`, `from`, `to`, `search`, `limit`, `offset`
 
 #### `GET /v1/audit/events` — Query governance decision audit trail
+#### `GET /v1/audit-log/verify?org_id=xxx` — Verify audit chain integrity
+
+Returns: `{ valid: true, total_entries: 150, verified_entries: 150 }` or details of the first broken link.
 
 ### Webhooks
 
@@ -515,6 +588,8 @@ Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confid
 #### `GET /v1/metrics/tenants` — Organization-level metrics
 #### `GET /v1/metrics/agents` — Agent list with metrics
 #### `GET /v1/metrics/provider-breakdown` — Usage by provider
+#### `GET /v1/metrics/governance` — Governance analytics (blocked actions, spend prevented, daily trends)
+#### `GET /v1/metrics/tools` — Per-tool metrics (evaluations, denials, cost, block rate)
 
 ### Telemetry
 
@@ -536,12 +611,14 @@ Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confid
 | **Policy Studio** | `/policy-studio` | Versioned policy management (create/publish/rollback/diff), legacy rules/thresholds/budgets/rate limits, simulator |
 | **Run Explorer** | `/runs` | Filterable table of all runs with status, provider, cost display |
 | **Run Detail** | `/runs/:runId` | Event timeline, cost events, analysis panel |
-| **Tool Registry** | `/tools` | Register tools, auto-classify risk, risk class reference, search/filter |
+| **Tool Registry** | `/tools` | Register tools, auto-classify risk, batch classify, risk class reference |
+| **MCP Servers** | `/mcp` | MCP server registry, tool discovery, auto-classification, sync |
 | **Audit Explorer** | `/audit` | Entity-level audit log with search, type filtering, expandable payloads |
 | **Agents** | `/agents` | Register agents with framework/environment/provider, view stats |
 | **Agent Detail** | `/agents/:agentId` | Agent KPIs, linked policies, allowed tools, recent runs |
 | **Tenants** | `/tenants` | Org-level metrics |
 | **Integrations** | `/integrations` | API keys and framework detection |
+| **Governance Dashboard** | via `/overview` | Blocked actions, approval rates, spend prevented, risk distribution |
 
 ## Data Model
 
@@ -582,10 +659,34 @@ Organization ─┬── Agent (framework, environment, provider)
 | `make down` | Stop Docker containers |
 | `make logs` | Follow Docker container logs |
 
+### Enforcement Modes
+
+| Mode | Sensitive Actions | Non-Sensitive | `would_deny_in_prod` |
+|------|-------------------|---------------|----------------------|
+| `DEV` | Allow + warn | Allow | `true` for sensitive |
+| `STAGING` | Allow + warn | Allow | `true` for sensitive |
+| `PROD` | Deny (unless explicit ALLOW rule) | Default allow | N/A |
+
+Sensitive risk classes: `MONEY_MOVEMENT`, `DATA_EXPORT`, `CODE_EXECUTION`, `FILE_MUTATION`, `ADMIN_ACTION`, `CREDENTIAL_USE`, `PII_ACCESS`, `EXTERNAL_COMMUNICATION`.
+
+### Examples
+
+Working integration examples in `examples/`:
+
+```bash
+# Run any example (requires Governor API running locally)
+npx tsx examples/openai-agent/index.ts     # OpenAI function-calling
+npx tsx examples/langchain-agent/index.ts  # LangChain tools
+npx tsx examples/mcp-server/index.ts       # MCP server governance
+npx tsx examples/internal-tool/index.ts    # Internal pipeline + telemetry
+```
+
+See [examples/README.md](./examples/README.md) for full documentation.
+
 ### Testing
 
 ```bash
-# Policy engine unit tests (78 tests)
+# Policy engine unit tests (131 tests)
 pnpm --filter @governor/policy-engine test
 
 # API integration tests
@@ -617,9 +718,20 @@ pnpm build && pnpm test
 
 ## Roadmap
 
+### Completed
+- Enforcement consistency (DEV/STAGING/PROD with sensitive action handling).
+- Policy simulation engine (single + historical blast radius).
+- Policy version lifecycle (validation, conflict detection, structured diff).
+- MCP server governance (registry, tool discovery, auto-classification).
+- Advanced approval workflows (chains, escalation, bulk actions).
+- Batch risk classification.
+- Operator analytics (governance metrics, per-tool analytics).
+- Audit hash chaining + integrity verification.
+- Integration examples (OpenAI, LangChain, MCP, internal tools).
+
 ### Next: Enterprise Depth
-- Model-backed analyst copilot (RAG over run/event/policy data) replacing heuristic run analyzer.
-- Signed decision attestations and tamper-evident audit chain.
+- Policy pack marketplace (installable rule + risk mapping bundles).
+- Model-backed analyst copilot (RAG over run/event/policy data).
 - SSO/SCIM + stronger Clerk org role mapping.
 - Data retention controls, PII tagging/redaction pipeline.
 - Multi-region deployment blueprint.

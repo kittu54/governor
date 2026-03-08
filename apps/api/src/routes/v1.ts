@@ -14,6 +14,8 @@ import { policiesRoutes } from "../modules/policies/routes";
 import { toolsRoutes } from "../modules/tools/routes";
 import { auditLogRoutes } from "../modules/auditlog/routes";
 import { webhooksRoutes } from "../modules/webhooks/routes";
+import { simulationRoutes } from "../modules/simulation/routes";
+import { mcpRoutes } from "../modules/mcp/routes";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(evaluateRoutes);
@@ -31,4 +33,6 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(toolsRoutes, { prefix: "/tools" });
   await app.register(auditLogRoutes, { prefix: "/audit-log" });
   await app.register(webhooksRoutes, { prefix: "/webhooks" });
+  await app.register(simulationRoutes, { prefix: "/simulation" });
+  await app.register(mcpRoutes, { prefix: "/mcp" });
 };

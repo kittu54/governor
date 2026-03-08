@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Fragment } from "react";
 import {
   UserRoundCog, CheckCircle, XCircle, Loader2, Search, Filter,
   AlertTriangle, Clock, ChevronDown, ChevronRight, ArrowUpRight, MessageSquare,
@@ -129,13 +130,15 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          decided_by: "console_user",
+          action: action.toUpperCase(),
+          actor_user_id: "console_user",
           comment: comment || undefined,
         }),
       });
 
       if (!res.ok) {
-        showToast(`Failed to ${action}`, "error");
+        const err = await res.json().catch(() => null);
+        showToast(err?.error ?? `Failed to ${action}`, "error");
         return;
       }
 
@@ -160,14 +163,17 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
       const res = await fetch(`${API}/v1/approvals/${approvalId}/comment`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ comment: commentText, decided_by: "console_user" }),
+        body: JSON.stringify({ action: "COMMENT", comment: commentText, actor_user_id: "console_user" }),
       });
       if (res.ok) {
         showToast("Comment added");
         setCommentText("");
+      } else {
+        const err = await res.json().catch(() => null);
+        showToast(err?.error ?? "Failed to add comment", "error");
       }
     } catch {
-      showToast("Failed to add comment", "error");
+      showToast("Network error", "error");
     } finally {
       setLoading(null);
     }
@@ -264,8 +270,8 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
                   const isExpanded = expandedId === approval.id;
                   const isPending = approval.status === "PENDING" && !approval.is_expired;
                   return (
-                    <>
-                      <TableRow key={approval.id} className={isExpanded ? "border-b-0" : ""}>
+                    <Fragment key={approval.id}>
+                      <TableRow className={isExpanded ? "border-b-0" : ""}>
                         <TableCell>
                           <button onClick={() => setExpandedId(isExpanded ? null : approval.id)} className="text-muted-foreground hover:text-foreground">
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -326,7 +332,7 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
 
                       {/* Expanded Detail */}
                       {isExpanded && (
-                        <TableRow key={`${approval.id}-detail`}>
+                        <TableRow>
                           <TableCell colSpan={9} className="border-t-0 bg-muted/20 px-8 py-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div>
@@ -389,7 +395,7 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })
               )}

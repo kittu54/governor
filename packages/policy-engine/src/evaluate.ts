@@ -68,7 +68,8 @@ function makeResult(
   warnings: string[],
   matchedRuleIds: string[],
   input: PolicyEvaluationInput,
-  facts: Record<string, unknown>
+  facts: Record<string, unknown>,
+  wouldDenyInProd?: boolean,
 ): PolicyEvaluationResult {
   const budgetSnapshot = {
     org_spend_today_usd: input.budgets.usage.org_spend_today_usd,
@@ -87,6 +88,8 @@ function makeResult(
       }
     : undefined;
 
+  const sensitive = input.context.is_sensitive || isSensitiveRiskClass(input.context.risk_class);
+
   return {
     decision,
     reason,
@@ -99,6 +102,8 @@ function makeResult(
     normalized_facts: facts,
     enforcement_mode: input.context.environment,
     risk_class: input.context.risk_class,
+    is_sensitive: sensitive,
+    would_deny_in_prod: wouldDenyInProd ?? false,
   };
 }
 
@@ -337,18 +342,20 @@ export function evaluatePolicy(input: PolicyEvaluationInput): PolicyEvaluationRe
   }
 
   // ─── Step 7: Default fallback ─────────────────────────────
+  const actionIsSensitive = sensitive || isSensitiveRiskClass(riskClass);
+
   switch (env) {
     case "PROD": {
-      if (sensitive || isSensitiveRiskClass(riskClass)) {
+      if (actionIsSensitive) {
         const reason = `Default DENY in PROD for sensitive action (risk class: ${riskClass})`;
         trace.push({
           code: "DEFAULT_DENY",
           check_type: "default_fallback",
           message: reason,
           timestamp: now,
-          metadata: { environment: "PROD", risk_class: riskClass, is_sensitive: sensitive },
+          metadata: { environment: "PROD", risk_class: riskClass, is_sensitive: actionIsSensitive },
         });
-        return makeResult("DENY", reason, trace, warnings, matchedIds, input, facts);
+        return makeResult("DENY", reason, trace, warnings, matchedIds, input, facts, false);
       }
       const reason = "Default ALLOW in PROD for non-sensitive action (no matching policies)";
       trace.push({
@@ -358,35 +365,56 @@ export function evaluatePolicy(input: PolicyEvaluationInput): PolicyEvaluationRe
         timestamp: now,
         metadata: { environment: "PROD", risk_class: riskClass },
       });
-      return makeResult("ALLOW", reason, trace, warnings, matchedIds, input, facts);
+      return makeResult("ALLOW", reason, trace, warnings, matchedIds, input, facts, false);
     }
 
     case "STAGING": {
-      if (sensitive || isSensitiveRiskClass(riskClass)) {
-        warnings.push(`STAGING warning: sensitive action ${input.context.tool_name}.${input.context.tool_action} (${riskClass}) would be DENIED in PROD`);
+      const wouldDeny = actionIsSensitive;
+      if (wouldDeny) {
+        warnings.push(`STAGING warning: sensitive action ${input.context.tool_name}.${input.context.tool_action} (${riskClass}) would be DENIED in PROD — add an explicit ALLOW rule before promoting`);
+        trace.push({
+          code: "STAGING_PROD_PREVIEW",
+          check_type: "enforcement_preview",
+          message: `Would be DENIED in PROD: no explicit ALLOW for sensitive risk class ${riskClass}`,
+          timestamp: now,
+          metadata: { would_deny_in_prod: true, risk_class: riskClass },
+        });
       }
-      const reason = "Default ALLOW in STAGING with warnings";
+      const reason = wouldDeny
+        ? "Default ALLOW in STAGING (would be DENIED in PROD)"
+        : "Default ALLOW in STAGING";
       trace.push({
         code: "DEFAULT_ALLOW",
         check_type: "default_fallback",
         message: reason,
         timestamp: now,
-        metadata: { environment: "STAGING", risk_class: riskClass, warnings },
+        metadata: { environment: "STAGING", risk_class: riskClass, would_deny_in_prod: wouldDeny },
       });
-      return makeResult("ALLOW", reason, trace, warnings, matchedIds, input, facts);
+      return makeResult("ALLOW", reason, trace, warnings, matchedIds, input, facts, wouldDeny);
     }
 
     case "DEV":
     default: {
+      const wouldDeny = actionIsSensitive;
+      if (wouldDeny) {
+        warnings.push(`DEV notice: sensitive action ${input.context.tool_name}.${input.context.tool_action} (${riskClass}) would be DENIED in PROD`);
+        trace.push({
+          code: "DEV_PROD_PREVIEW",
+          check_type: "enforcement_preview",
+          message: `Would be DENIED in PROD: no explicit ALLOW for sensitive risk class ${riskClass}`,
+          timestamp: now,
+          metadata: { would_deny_in_prod: true, risk_class: riskClass },
+        });
+      }
       const reason = "Default ALLOW in DEV mode (audit only)";
       trace.push({
         code: "DEFAULT_ALLOW",
         check_type: "default_fallback",
         message: reason,
         timestamp: now,
-        metadata: { environment: env, risk_class: riskClass },
+        metadata: { environment: env, risk_class: riskClass, would_deny_in_prod: wouldDeny },
       });
-      return makeResult("ALLOW", reason, trace, warnings, matchedIds, input, facts);
+      return makeResult("ALLOW", reason, trace, warnings, matchedIds, input, facts, wouldDeny);
     }
   }
 }

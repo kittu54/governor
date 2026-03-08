@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "declaration": false,
+    "resolveJsonModule": true,
+    "typeRoots": ["../apps/api/node_modules/@types"],
+    "paths": {
+      "@governor/sdk": ["../packages/sdk/src/index"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

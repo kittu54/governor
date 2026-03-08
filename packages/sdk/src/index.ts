@@ -22,6 +22,18 @@ export interface GovernorClientConfig {
   timeout_ms?: number;
   max_retries?: number;
   on_error?: "throw" | "allow" | "deny";
+  /** Called when an action is allowed but would be denied in PROD (DEV/STAGING only). */
+  on_enforcement_warning?: (warning: EnforcementWarning) => void;
+}
+
+export interface EnforcementWarning {
+  tool_name: string;
+  tool_action: string;
+  risk_class: RiskClass;
+  enforcement_mode: EnforcementMode;
+  would_deny_in_prod: boolean;
+  is_sensitive: boolean;
+  warnings: string[];
 }
 
 export interface WrapToolOptions<TArgs extends unknown[], TResult> {
@@ -245,6 +257,18 @@ export function createGovernor(config: GovernorClientConfig) {
           evaluation.reason,
           { risk_class: evaluation.risk_class }
         );
+      }
+
+      if (evaluation.would_deny_in_prod && config.on_enforcement_warning) {
+        config.on_enforcement_warning({
+          tool_name: options.tool_name,
+          tool_action: options.tool_action,
+          risk_class: evaluation.risk_class,
+          enforcement_mode: evaluation.enforcement_mode,
+          would_deny_in_prod: true,
+          is_sensitive: evaluation.is_sensitive,
+          warnings: evaluation.warnings,
+        });
       }
 
       try {
