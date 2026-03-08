@@ -135,6 +135,6 @@ export const policyRoutes: FastifyPluginAsync = async (app) => {
   app.post("/simulate", async (request) => {
     const payload = evaluateRequestSchema.parse(request.body);
     const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
-    return service.evaluate({ ...payload, org_id: orgId }, { simulate: true });
+    return service.evaluate({ ...payload, org_id: orgId } as import("@governor/shared").EvaluateRequest, { simulate: true });
   });
 };
