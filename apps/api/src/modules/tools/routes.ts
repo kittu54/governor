@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createToolSchema, updateToolSchema, classifyRiskSchema } from "@governor/shared";
 import { classifyToolRisk, RISK_CLASS_META, RISK_CLASSES } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const toolsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {

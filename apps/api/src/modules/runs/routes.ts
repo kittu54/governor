@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { runAnalyzeSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const runsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request) => {

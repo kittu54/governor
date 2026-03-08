@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 function formatDay(date: Date): string {
   return date.toISOString().slice(0, 10);

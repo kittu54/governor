@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const eventsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/stream", async (request, reply) => {

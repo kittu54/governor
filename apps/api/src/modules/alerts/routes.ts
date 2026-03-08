@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 import { AlertService } from "./service.js";
 
 export const alertRoutes: FastifyPluginAsync = async (app) => {

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verifyAuditChain } from "./hash.js";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const auditLogRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {

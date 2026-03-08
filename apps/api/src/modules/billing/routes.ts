@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 const PLAN_LIMITS: Record<string, number> = {
   free: 10_000,

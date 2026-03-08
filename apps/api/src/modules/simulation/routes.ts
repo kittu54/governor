@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { enforcementModeSchema, riskClassSchema } from "@governor/shared";
 import type { RiskClass, EnforcementMode } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 import { SimulationService, type SingleSimulationRequest, type HistoricalSimulationRequest } from "./service.js";
 
 const simulateSingleSchema = z.object({

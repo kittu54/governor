@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ingestEventsRequestSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const ingestRoutes: FastifyPluginAsync = async (app) => {
   app.post("/events", async (request, reply) => {

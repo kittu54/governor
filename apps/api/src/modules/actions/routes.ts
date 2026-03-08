@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { RISK_CLASS_META } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const actionsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { requireAuthenticated } from "../../plugins/auth";
+import { requireAuthenticated } from "../../plugins/auth.js";
 
 export const meRoutes: FastifyPluginAsync = async (app) => {
   /**

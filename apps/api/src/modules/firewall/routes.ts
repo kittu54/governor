@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { DEFAULT_FIREWALL_RULES } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 import { FirewallService } from "./service.js";
 
 export const firewallRoutes: FastifyPluginAsync = async (app) => {

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { evaluateRequestSchema, simulateRequestSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 import { PolicyService } from "./service.js";
 
 export const evaluateRoutes: FastifyPluginAsync = async (app) => {

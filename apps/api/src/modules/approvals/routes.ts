@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { approvalDecisionSchema, approvalActionSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 const bulkActionSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(100),

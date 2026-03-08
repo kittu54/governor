@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { classifyToolRisk, isSensitiveRiskClass, riskClassSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 import type { RiskClass } from "@governor/shared";
 
 const createMCPServerSchema = z.object({

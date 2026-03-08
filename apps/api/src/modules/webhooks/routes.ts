@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { createWebhookSchema, updateWebhookSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const webhooksRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {

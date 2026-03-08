@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { auditCompleteSchema } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   app.get("/events", async (request) => {

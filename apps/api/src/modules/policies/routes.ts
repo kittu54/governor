@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { createPolicySchema, updatePolicySchema, createPolicyVersionSchema, policyDefinitionSchema } from "@governor/shared";
 import { compilePolicy, generateChecksum, diffPolicyDefinitions } from "@governor/policy-engine";
 import type { PolicyDefinition } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // ─── List Policies ──────────────────────────────────────────

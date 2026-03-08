@@ -6,7 +6,7 @@ import {
   rateLimitSchema,
   thresholdSchema
 } from "@governor/shared";
-import { resolveRequestOrg } from "../../plugins/auth";
+import { resolveRequestOrg } from "../../plugins/auth.js";
 import { PolicyService } from "./service.js";
 
 export const policyRoutes: FastifyPluginAsync = async (app) => {
