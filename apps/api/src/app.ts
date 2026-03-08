@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
 import type { PrismaClient } from "@prisma/client";
-import type Redis from "ioredis";
+import Redis from "ioredis";
 import { ZodError } from "zod";
 import { loadEnv, type EnvConfig } from "./config/env";
 import { createPrismaClient } from "./lib/prisma";
