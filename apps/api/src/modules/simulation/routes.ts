@@ -3,7 +3,7 @@ import { z } from "zod";
 import { enforcementModeSchema, riskClassSchema } from "@governor/shared";
 import type { RiskClass, EnforcementMode } from "@governor/shared";
 import { resolveRequestOrg } from "../../plugins/auth";
-import { SimulationService } from "./service";
+import { SimulationService, type SingleSimulationRequest, type HistoricalSimulationRequest } from "./service";
 
 const simulateSingleSchema = z.object({
   org_id: z.string().min(1),
@@ -38,7 +38,7 @@ export const simulationRoutes: FastifyPluginAsync = async (app) => {
       org_id: orgId,
       risk_class: payload.risk_class as RiskClass | undefined,
       environment: payload.environment as EnforcementMode | undefined,
-    });
+    } as SingleSimulationRequest);
     return reply.send(result);
   });
 
@@ -49,7 +49,7 @@ export const simulationRoutes: FastifyPluginAsync = async (app) => {
       ...payload,
       org_id: orgId,
       risk_class: payload.risk_class as RiskClass | undefined,
-    });
+    } as HistoricalSimulationRequest);
     return reply.send(result);
   });
 };
