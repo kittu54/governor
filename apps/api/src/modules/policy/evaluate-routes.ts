@@ -13,21 +13,21 @@ export const evaluateRoutes: FastifyPluginAsync = async (app) => {
   app.post("/evaluate", async (request, reply) => {
     const payload = evaluateRequestSchema.parse(request.body);
     const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
-    const result = await service.evaluate({ ...payload, org_id: orgId });
+    const result = await service.evaluate({ ...payload, org_id: orgId } as import("@governor/shared").EvaluateRequest);
     return reply.send(result);
   });
 
   app.post("/evaluate/simulate", async (request, reply) => {
     const payload = simulateRequestSchema.parse(request.body);
     const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
-    const result = await service.evaluate({ ...payload, org_id: orgId }, { simulate: true });
+    const result = await service.evaluate({ ...payload, org_id: orgId } as import("@governor/shared").EvaluateRequest, { simulate: true });
     return reply.send(result);
   });
 
   app.post("/evaluate/explain", async (request, reply) => {
     const payload = evaluateRequestSchema.parse(request.body);
     const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
-    const result = await service.evaluateExplain({ ...payload, org_id: orgId });
+    const result = await service.evaluateExplain({ ...payload, org_id: orgId } as import("@governor/shared").EvaluateRequest);
     return reply.send(result);
   });
 };
