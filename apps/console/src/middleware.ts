@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { isClerkEnabled, isSupabaseEnabled } from "./lib/clerk";
+import { getSupabasePublicConfig } from "./lib/runtime-config";
 
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   try {
