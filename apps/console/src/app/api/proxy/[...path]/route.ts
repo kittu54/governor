@@ -1,11 +1,16 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { API_BASE_URL } from "@/lib/api";
+import { getApiBaseUrl } from "@/lib/runtime-config";
+
+export const runtime = "nodejs";
+
+type RouteParams = { params: Promise<{ path: string[] }> };
 
 function buildTargetUrl(path: string[], request: NextRequest): string {
   const url = new URL(request.url);
   const query = url.search;
-  return `${API_BASE_URL}/v1/${path.join("/")}${query}`;
+  const apiBaseUrl = getApiBaseUrl("server");
+  return `${apiBaseUrl}/v1/${path.join("/")}${query}`;
 }
 
 function forwardHeaders(request: NextRequest): Record<string, string> {
@@ -13,7 +18,7 @@ function forwardHeaders(request: NextRequest): Record<string, string> {
     "content-type": "application/json",
   };
   const auth = request.headers.get("authorization");
-  if (auth) headers["authorization"] = auth;
+  if (auth) headers.authorization = auth;
   const govKey = request.headers.get("x-governor-key");
   if (govKey) headers["x-governor-key"] = govKey;
   const orgId = request.headers.get("x-org-id");
@@ -21,71 +26,52 @@ function forwardHeaders(request: NextRequest): Record<string, string> {
   return headers;
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  const { path } = await params;
-  const response = await fetch(buildTargetUrl(path, request), {
-    method: "GET",
-    headers: forwardHeaders(request),
-    cache: "no-store"
-  });
+async function forwardRequest(request: NextRequest, path: string[], method: string): Promise<NextResponse> {
+  const targetUrl = buildTargetUrl(path, request);
 
-  return new Response(response.body, {
-    status: response.status,
-    headers: {
-      "content-type": response.headers.get("content-type") ?? "application/json"
-    }
-  });
+  try {
+    const body = method === "GET" || method === "DELETE" ? undefined : await request.text();
+    const upstream = await fetch(targetUrl, {
+      method,
+      headers: forwardHeaders(request),
+      body,
+      cache: method === "GET" || method === "DELETE" ? "no-store" : undefined,
+    });
+
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: {
+        "content-type": upstream.headers.get("content-type") ?? "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("[console] API proxy request failed", { method, targetUrl, error });
+    return NextResponse.json(
+      {
+        error: "Upstream API request failed",
+        target: targetUrl,
+      },
+      { status: 502 },
+    );
+  }
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function GET(request: NextRequest, { params }: RouteParams) {
   const { path } = await params;
-  const body = await request.text();
-
-  const response = await fetch(buildTargetUrl(path, request), {
-    method: "POST",
-    headers: forwardHeaders(request),
-    body
-  });
-
-  return new Response(response.body, {
-    status: response.status,
-    headers: {
-      "content-type": response.headers.get("content-type") ?? "application/json"
-    }
-  });
+  return forwardRequest(request, path, "GET");
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   const { path } = await params;
-  const body = await request.text();
-
-  const response = await fetch(buildTargetUrl(path, request), {
-    method: "PUT",
-    headers: forwardHeaders(request),
-    body
-  });
-
-  return new Response(response.body, {
-    status: response.status,
-    headers: {
-      "content-type": response.headers.get("content-type") ?? "application/json"
-    }
-  });
+  return forwardRequest(request, path, "POST");
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { path } = await params;
+  return forwardRequest(request, path, "PUT");
+}
 
-  const response = await fetch(buildTargetUrl(path, request), {
-    method: "DELETE",
-    headers: forwardHeaders(request),
-    cache: "no-store"
-  });
-
-  return new Response(response.body, {
-    status: response.status,
-    headers: {
-      "content-type": response.headers.get("content-type") ?? "application/json"
-    }
-  });
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const { path } = await params;
+  return forwardRequest(request, path, "DELETE");
 }
