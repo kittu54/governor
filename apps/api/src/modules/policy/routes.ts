@@ -7,7 +7,7 @@ import {
   thresholdSchema
 } from "@governor/shared";
 import { resolveRequestOrg } from "../../plugins/auth";
-import { PolicyService } from "./service";
+import { PolicyService } from "./service.js";
 
 export const policyRoutes: FastifyPluginAsync = async (app) => {
   const service = new PolicyService({

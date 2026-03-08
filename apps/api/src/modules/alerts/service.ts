@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { GovernorEventBus } from "../events/bus";
+import type { GovernorEventBus } from "../events/bus.js";
 
 export interface AlertPayload {
   org_id: string;

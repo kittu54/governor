@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { DEFAULT_FIREWALL_RULES } from "@governor/shared";
 import { resolveRequestOrg } from "../../plugins/auth";
-import { FirewallService } from "./service";
+import { FirewallService } from "./service.js";
 
 export const firewallRoutes: FastifyPluginAsync = async (app) => {
   const service = new FirewallService(app.prisma);

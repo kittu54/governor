@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { generateApiKey } from "../gateway/auth";
+import { generateApiKey } from "../gateway/auth.js";
 import { resolveRequestOrg } from "../../plugins/auth";
 
 export const apiKeyRoutes: FastifyPluginAsync = async (app) => {

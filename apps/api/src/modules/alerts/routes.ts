@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { resolveRequestOrg } from "../../plugins/auth";
-import { AlertService } from "./service";
+import { AlertService } from "./service.js";
 
 export const alertRoutes: FastifyPluginAsync = async (app) => {
   const service = new AlertService(app.prisma, app.eventBus);

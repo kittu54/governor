@@ -5,12 +5,12 @@ import sensible from "@fastify/sensible";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import { ZodError } from "zod";
-import { loadEnv, type EnvConfig } from "./config/env";
-import { createPrismaClient } from "./lib/prisma";
-import { createRedisClient, NullRedis } from "./lib/redis";
-import { authPlugin } from "./plugins/auth";
-import { v1Routes } from "./routes/v1";
-import { createEventBus, GovernorEventBus } from "./modules/events/bus";
+import { loadEnv, type EnvConfig } from "./config/env.js";
+import { createPrismaClient } from "./lib/prisma.js";
+import { createRedisClient, NullRedis } from "./lib/redis.js";
+import { authPlugin } from "./plugins/auth.js";
+import { v1Routes } from "./routes/v1.js";
+import { createEventBus, GovernorEventBus } from "./modules/events/bus.js";
 
 export interface AppDependencies {
   prisma: PrismaClient;

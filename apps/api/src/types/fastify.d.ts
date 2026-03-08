@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type Redis from "ioredis";
-import type { EnvConfig } from "../config/env";
-import type { GovernorEventBus } from "../modules/events/bus";
+import type { EnvConfig } from "../config/env.js";
+import type { GovernorEventBus } from "../modules/events/bus.js";
 
 declare module "fastify" {
   interface FastifyInstance {

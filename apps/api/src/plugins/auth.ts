@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { verifyToken } from "@clerk/backend";
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import { resolveApiKey } from "../modules/gateway/auth";
+import { resolveApiKey } from "../modules/gateway/auth.js";
 
 /** Track recently provisioned orgs to avoid repeated DB hits */
 const provisionedOrgs = new Set<string>();

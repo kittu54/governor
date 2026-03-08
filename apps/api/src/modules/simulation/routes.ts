@@ -3,7 +3,7 @@ import { z } from "zod";
 import { enforcementModeSchema, riskClassSchema } from "@governor/shared";
 import type { RiskClass, EnforcementMode } from "@governor/shared";
 import { resolveRequestOrg } from "../../plugins/auth";
-import { SimulationService, type SingleSimulationRequest, type HistoricalSimulationRequest } from "./service";
+import { SimulationService, type SingleSimulationRequest, type HistoricalSimulationRequest } from "./service.js";
 
 const simulateSingleSchema = z.object({
   org_id: z.string().min(1),

@@ -10,7 +10,7 @@ import type {
   EnforcementMode,
 } from "@governor/shared";
 import { classifyToolRisk, isSensitiveRiskClass, type RiskClass } from "@governor/shared";
-import type { GovernorEventBus } from "../events/bus";
+import type { GovernorEventBus } from "../events/bus.js";
 
 interface PolicyServiceDependencies {
   prisma: PrismaClient;

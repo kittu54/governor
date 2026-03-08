@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { gatewayCheckSchema } from "@governor/shared";
-import { PolicyService } from "../policy/service";
-import { resolveApiKey } from "./auth";
+import { PolicyService } from "../policy/service.js";
+import { resolveApiKey } from "./auth.js";
 
 export const gatewayRoutes: FastifyPluginAsync = async (app) => {
   const service = new PolicyService({
