@@ -23,16 +23,14 @@ export interface AppDependencies {
 }
 
 function resolveCorsOrigin(config: EnvConfig): string | string[] | boolean {
-  if (config.NODE_ENV === "production") {
-    if (config.CORS_ORIGIN === "*") {
-      throw new Error(
-        "CORS_ORIGIN=* is not allowed in production. Set an explicit allowlist (comma-separated origins)."
-      );
-    }
-    return config.CORS_ORIGIN.split(",").map((o) => o.trim());
+  if (config.CORS_ORIGIN === "*") {
+    return true;
   }
-  if (config.CORS_ORIGIN === "*") return true;
-  return config.CORS_ORIGIN.split(",").map((o) => o.trim());
+
+  return config.CORS_ORIGIN
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 }
 
 export async function buildApp(overrides?: Partial<AppDependencies>) {
@@ -145,6 +143,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
     }
-    res.end(JSON.stringify({ error: "Server bootstrap failure" }));
+    const message = error instanceof Error ? error.message : "Unknown bootstrap error";
+    res.end(JSON.stringify({ error: "Server bootstrap failure", message }));
   }
 }
