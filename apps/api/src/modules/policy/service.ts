@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
-import type Redis from "ioredis";
+import type { Redis } from "ioredis";
 import { evaluatePolicy, explain as explainPolicy } from "@governor/policy-engine";
 import type {
   EvaluateRequest,
@@ -19,7 +19,7 @@ interface PolicyServiceDependencies {
 }
 
 export class PolicyService {
-  constructor(private readonly deps: PolicyServiceDependencies) {}
+  constructor(private readonly deps: PolicyServiceDependencies) { }
 
   private async resolveRiskClass(orgId: string, toolName: string, toolAction: string): Promise<{ riskClass: RiskClass; isSensitive: boolean }> {
     const tool = await this.deps.prisma.tool.findUnique({
