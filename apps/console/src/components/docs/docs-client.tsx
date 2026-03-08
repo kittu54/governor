@@ -1121,8 +1121,8 @@ make dev
           <tbody>
             {[
               ["DATABASE_URL", "Yes", "PostgreSQL connection string"],
-              ["REDIS_URL", "Yes", "Redis connection string"],
-              ["NEXT_PUBLIC_API_BASE_URL", "No", "API URL for console (default: http://localhost:4000)"],
+              ["REDIS_URL", "No", "Redis connection string (optional — uses in-memory fallback)"],
+              ["NEXT_PUBLIC_API_BASE_URL", "No", "API URL for console (production: https://api.governor.run)"],
               ["CORS_ORIGIN", "No", "CORS allowed origins (default: *)"],
               ["NODE_ENV", "No", "production or development"],
               ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "No", "Clerk auth (optional)"],

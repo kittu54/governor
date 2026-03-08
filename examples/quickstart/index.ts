@@ -99,7 +99,8 @@ async function main() {
     handleError(err);
   }
 
-  console.log("Done. Check the Governor console at http://localhost:3000/actions");
+  const consoleUrl = process.env.GOVERNOR_CONSOLE_URL ?? "https://agentgovernor.vercel.app";
+  console.log(`Done. Check the Governor console at ${consoleUrl}/actions`);
 }
 
 function handleError(err: unknown) {

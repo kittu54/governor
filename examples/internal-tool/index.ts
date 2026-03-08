@@ -19,7 +19,7 @@ import {
 // ── 1. Initialize Governor with explicit config ─────────────────
 
 const governor = createGovernor({
-  api_base_url: process.env.GOVERNOR_API_BASE_URL ?? "http://localhost:4000",
+  api_base_url: process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? "https://api.governor.run",
   org_id: process.env.GOVERNOR_ORG_ID ?? "org_demo_1",
   agent_id: process.env.GOVERNOR_AGENT_ID ?? "agent_internal_1",
   api_key: process.env.GOVERNOR_API_KEY ?? "dev-local-key",

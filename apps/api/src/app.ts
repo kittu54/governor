@@ -7,7 +7,7 @@ import type { Redis } from "ioredis";
 import { ZodError } from "zod";
 import { loadEnv, type EnvConfig } from "./config/env";
 import { createPrismaClient } from "./lib/prisma";
-import { createRedisClient } from "./lib/redis";
+import { createRedisClient, NullRedis } from "./lib/redis";
 import { authPlugin } from "./plugins/auth";
 import { v1Routes } from "./routes/v1";
 import { createEventBus, GovernorEventBus } from "./modules/events/bus";
@@ -42,7 +42,7 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
   });
 
   const prisma = overrides?.prisma ?? createPrismaClient();
-  const redis = overrides?.redis ?? createRedisClient(config.REDIS_URL);
+  const redis = overrides?.redis ?? (config.REDIS_URL ? createRedisClient(config.REDIS_URL) : new NullRedis() as any);
   const eventBus = overrides?.eventBus ?? createEventBus();
 
   app.decorate("prisma", prisma);
@@ -88,11 +88,15 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
     } catch {
       checks.database = false;
     }
-    try {
-      const pong = await redis.ping();
-      checks.redis = pong === "PONG";
-    } catch {
-      checks.redis = false;
+    if (config.REDIS_URL) {
+      try {
+        const pong = await redis.ping();
+        checks.redis = pong === "PONG";
+      } catch {
+        checks.redis = false;
+      }
+    } else {
+      checks.redis = true; // in-memory stub, always healthy
     }
     const ok = checks.database && checks.redis;
     return reply.status(ok ? 200 : 503).send({ ok, checks, timestamp: new Date().toISOString() });
@@ -104,7 +108,7 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
     if (!overrides?.prisma) {
       await prisma.$disconnect();
     }
-    if (!overrides?.redis) {
+    if (!overrides?.redis && config.REDIS_URL) {
       await redis.quit();
     }
   });
