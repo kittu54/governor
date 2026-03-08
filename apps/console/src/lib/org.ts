@@ -1,21 +1,11 @@
 import { redirect } from "next/navigation";
-import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
+import { isSupabaseEnabled } from "./clerk";
 
 /**
  * Try to resolve the current org ID. Returns null if no org is selected.
  * Does NOT redirect — use for pages that handle the no-org state themselves.
  */
 export async function tryResolveOrgId(): Promise<string | null> {
-  if (isClerkEnabled) {
-    try {
-      const { auth } = await import("@clerk/nextjs/server");
-      const { orgId } = await auth();
-      return orgId ?? null;
-    } catch {
-      return null;
-    }
-  }
-
   if (isSupabaseEnabled) {
     try {
       const { getSupabaseServerClient } = await import("./supabase-server");

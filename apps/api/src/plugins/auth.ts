@@ -1,5 +1,4 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { verifyToken } from "@clerk/backend";
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { resolveApiKey } from "../modules/gateway/auth.js";
@@ -7,7 +6,7 @@ import { resolveApiKey } from "../modules/gateway/auth.js";
 /** Track recently provisioned orgs to avoid repeated DB hits */
 const provisionedOrgs = new Set<string>();
 
-async function autoProvisionClerkOrg(
+async function autoProvisionOrg(
   app: FastifyInstance,
   orgId: string,
   userId: string,
@@ -35,7 +34,7 @@ async function autoProvisionClerkOrg(
         id: userId,
         orgId,
         email: userId,
-        role: orgRole === "admin" || orgRole === "org:admin" ? "owner" : "member",
+        role: orgRole === "admin" ? "owner" : "member",
       },
       update: {},
     });
@@ -115,31 +114,6 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
         }
       }
 
-      if (app.config.CLERK_SECRET_KEY) {
-        try {
-          const verified = await verifyToken(token, {
-            secretKey: app.config.CLERK_SECRET_KEY,
-          });
-          const claims = verified as Record<string, unknown>;
-          const userId = verified.sub;
-          const orgId = claims.org_id as string | undefined;
-          const orgRole = claims.org_role as string | undefined;
-          const orgSlug = claims.org_slug as string | undefined;
-
-          request.auth.userId = userId;
-          request.auth.orgId = orgId;
-          request.auth.orgRole = orgRole;
-          request.auth.authMethod = "clerk";
-
-          if (orgId && userId) {
-            await autoProvisionClerkOrg(app, orgId, userId, orgRole, orgSlug);
-          }
-          return;
-        } catch {
-          // Token invalid — fall through
-        }
-      }
-
       // 2b) Supabase JWT (HS256)
       if (app.config.SUPABASE_JWT_SECRET) {
         try {
@@ -157,7 +131,7 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
             request.auth.authMethod = "supabase";
 
             if (orgId && userId) {
-              await autoProvisionClerkOrg(app, orgId, userId, orgRole, email);
+              await autoProvisionOrg(app, orgId, userId, orgRole, email);
             }
             return;
           }

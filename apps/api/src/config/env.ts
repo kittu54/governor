@@ -7,8 +7,6 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default("*"),
-  CLERK_SECRET_KEY: z.string().optional(),
-  CLERK_JWT_ISSUER: z.string().optional(),
   SUPABASE_JWT_SECRET: z.string().optional(),
 });
 
@@ -30,10 +28,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): EnvConfig {
         "[governor] WARNING: CORS_ORIGIN is '*' in production. This is insecure; set an explicit allowlist."
       );
     }
-    if (!config.CLERK_SECRET_KEY && !config.SUPABASE_JWT_SECRET) {
+    if (!config.SUPABASE_JWT_SECRET) {
       console.warn(
-        "[governor] WARNING: Neither CLERK_SECRET_KEY nor SUPABASE_JWT_SECRET is set in production. " +
-          "Only API key auth will work — JWT auth will be unavailable."
+        "[governor] WARNING: SUPABASE_JWT_SECRET is not set in production. " +
+        "Only API key auth will work — JWT auth will be unavailable."
       );
     }
   }

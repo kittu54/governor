@@ -1,17 +1,8 @@
-import { authMode } from "@/lib/clerk";
 import { SupabaseSignIn } from "@/components/auth/supabase-auth";
+import { isSupabaseEnabled } from "@/lib/clerk";
 
-export default async function Page() {
-  if (authMode === "clerk") {
-    const { SignIn } = await import("@clerk/nextjs");
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <SignIn />
-      </div>
-    );
-  }
-
-  if (authMode === "supabase") {
+export default function Page() {
+  if (isSupabaseEnabled) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <SupabaseSignIn />
@@ -24,7 +15,7 @@ export default async function Page() {
       <div>
         <p className="text-lg font-semibold">Auth is disabled in local mode.</p>
         <p className="text-sm text-muted-foreground">
-          Set Clerk or Supabase environment variables to enable sign-in.
+          Set Supabase environment variables to enable sign-in.
         </p>
       </div>
     </div>

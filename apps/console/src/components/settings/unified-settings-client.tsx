@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, lazy, Suspense } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { authMode } from "@/lib/clerk";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,7 +88,7 @@ export function UnifiedSettingsClient({ orgId, apiBaseUrl, clerkEnabled, usage, 
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-sm text-muted-foreground">Manage your account, organization, billing, and API keys</p>
         </div>
-        <LogoutButton clerkEnabled={clerkEnabled} />
+        <LogoutButton />
       </div>
 
       {/* Tab bar */}
@@ -111,10 +112,10 @@ export function UnifiedSettingsClient({ orgId, apiBaseUrl, clerkEnabled, usage, 
       </div>
 
       {activeTab === "general" && (
-        <GeneralTab orgId={orgId} apiBaseUrl={apiBaseUrl} clerkEnabled={clerkEnabled} />
+        <GeneralTab orgId={orgId} apiBaseUrl={apiBaseUrl} />
       )}
       {activeTab === "profile" && (
-        <ProfileTab orgId={orgId} clerkEnabled={clerkEnabled} agents={agents} overview={overview} />
+        <ProfileTab orgId={orgId} agents={agents} overview={overview} />
       )}
       {activeTab === "billing" && (
         <BillingTab orgId={orgId} usage={usage} plans={plans} />
@@ -126,38 +127,34 @@ export function UnifiedSettingsClient({ orgId, apiBaseUrl, clerkEnabled, usage, 
   );
 }
 
-/* ─── Logout Button ──────────────────────────────────────── */
+function LogoutButton() {
+  async function handleSignOut() {
+    try {
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+      const supabase = getSupabaseBrowserClient();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore sign-out errors
+    }
+    window.location.href = "/sign-in";
+  }
 
-const ClerkSignOut = lazy(() =>
-  import("@clerk/nextjs").then((mod) => ({
-    default: ({ children }: { children: React.ReactNode }) => (
-      <mod.SignOutButton redirectUrl="/sign-in">{children}</mod.SignOutButton>
-    ),
-  }))
-);
-
-function LogoutButton({ clerkEnabled }: { clerkEnabled: boolean }) {
-  const btn = (
-    <Button variant="outline" size="sm" className="text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-300">
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => void handleSignOut()}
+      className="text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
+    >
       <LogOut className="h-4 w-4 mr-2" />
       Sign Out
     </Button>
   );
-
-  if (clerkEnabled) {
-    return (
-      <Suspense fallback={btn}>
-        <ClerkSignOut>{btn}</ClerkSignOut>
-      </Suspense>
-    );
-  }
-
-  return <div onClick={() => { window.location.href = "/"; }}>{btn}</div>;
 }
 
 /* ─── General Tab ────────────────────────────────────────── */
 
-function GeneralTab({ orgId, apiBaseUrl, clerkEnabled }: { orgId: string; apiBaseUrl: string; clerkEnabled: boolean }) {
+function GeneralTab({ orgId, apiBaseUrl }: { orgId: string; apiBaseUrl: string }) {
   const storedSettings = useMemo(() => {
     try {
       const stored = typeof window !== "undefined" ? localStorage.getItem("governor_settings") : null;
@@ -203,8 +200,8 @@ function GeneralTab({ orgId, apiBaseUrl, clerkEnabled }: { orgId: string; apiBas
             <CardDescription>Authentication provider</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <SettingRow label="Provider"><p className="text-sm font-medium text-foreground">{clerkEnabled ? "Clerk" : "Local Mode"}</p></SettingRow>
-            <SettingRow label="Status"><Badge variant={clerkEnabled ? "success" : "warning"}>{clerkEnabled ? "Enabled" : "Demo"}</Badge></SettingRow>
+            <SettingRow label="Provider"><p className="text-sm font-medium text-foreground">{authMode === "supabase" ? "Supabase" : "Local Mode"}</p></SettingRow>
+            <SettingRow label="Status"><Badge variant={authMode === "supabase" ? "success" : "warning"}>{authMode === "supabase" ? "Enabled" : "Demo"}</Badge></SettingRow>
           </CardContent>
         </Card>
 
@@ -246,7 +243,7 @@ function GeneralTab({ orgId, apiBaseUrl, clerkEnabled }: { orgId: string; apiBas
 
 /* ─── Profile Tab ────────────────────────────────────────── */
 
-function ProfileTab({ orgId, clerkEnabled, agents, overview }: { orgId: string; clerkEnabled: boolean; agents: AgentItem[]; overview: Props["overview"] }) {
+function ProfileTab({ orgId, agents, overview }: { orgId: string; agents: AgentItem[]; overview: Props["overview"] }) {
   const activeAgents = agents.filter((a) => a.status === "ACTIVE").length;
 
   return (
@@ -259,10 +256,10 @@ function ProfileTab({ orgId, clerkEnabled, agents, overview }: { orgId: string; 
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold text-foreground">{clerkEnabled ? "Clerk User" : "Console Admin"}</h2>
+                <h2 className="text-2xl font-bold text-foreground">{authMode === "supabase" ? "Supabase User" : "Console Admin"}</h2>
                 <Badge variant="success">Active</Badge>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{clerkEnabled ? "Authenticated via Clerk" : "Local Mode"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{authMode === "supabase" ? "Authenticated via Supabase" : "Local Mode"}</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 <Badge variant="secondary"><Shield className="mr-1 h-3 w-3" />Admin</Badge>
                 <Badge variant="secondary"><Building2 className="mr-1 h-3 w-3" />{orgId}</Badge>
@@ -285,7 +282,7 @@ function ProfileTab({ orgId, clerkEnabled, agents, overview }: { orgId: string; 
           <CardContent className="space-y-3">
             <SettingRow label="Role"><p className="text-sm font-medium">Administrator</p></SettingRow>
             <SettingRow label="Organization"><p className="font-mono text-sm">{orgId}</p></SettingRow>
-            <SettingRow label="Auth Provider"><p className="text-sm font-medium">{clerkEnabled ? "Clerk" : "Local Mode"}</p></SettingRow>
+            <SettingRow label="Auth Provider"><p className="text-sm font-medium">{authMode === "supabase" ? "Supabase" : "Local Mode"}</p></SettingRow>
             <SettingRow label="Agents Managed"><p className="text-sm font-medium">{agents.length}</p></SettingRow>
           </CardContent>
         </Card>

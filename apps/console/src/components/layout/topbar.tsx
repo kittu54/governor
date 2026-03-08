@@ -1,14 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const OrganizationSwitcher = dynamic(() => import("@clerk/nextjs").then((mod) => mod.OrganizationSwitcher), {
-  ssr: false,
-});
-const UserButton = dynamic(() => import("@clerk/nextjs").then((mod) => mod.UserButton), {
-  ssr: false,
-});
-import { getClerkModeLabel, authMode } from "@/lib/clerk";
+import { authMode, getClerkModeLabel } from "@/lib/clerk";
 import { Badge } from "@/components/ui/badge";
 import { SupabaseUserMenu } from "@/components/auth/supabase-user-menu";
 
@@ -23,19 +15,7 @@ export function Topbar() {
         <h2 className="text-xl font-semibold text-foreground">Operational Command Deck</h2>
       </div>
       <div className="flex items-center gap-3">
-        {authMode === "clerk" ? (
-          <>
-            <OrganizationSwitcher
-              appearance={{
-                elements: {
-                  organizationSwitcherTrigger: "rounded-lg border border-border bg-muted px-3 py-2 text-foreground"
-                }
-              }}
-              hidePersonal
-            />
-            <UserButton afterSignOutUrl="/sign-in" />
-          </>
-        ) : authMode === "supabase" ? (
+        {authMode === "supabase" ? (
           <SupabaseUserMenu />
         ) : (
           <div className="rounded-lg border border-border bg-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
