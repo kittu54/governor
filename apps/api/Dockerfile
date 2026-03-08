@@ -24,5 +24,8 @@ RUN corepack enable
 
 COPY --from=builder /app .
 
+COPY apps/api/start.sh /app/apps/api/start.sh
+RUN chmod +x /app/apps/api/start.sh
+
 EXPOSE 4000
-CMD ["pnpm", "--filter", "@governor/api", "start"]
+CMD ["/app/apps/api/start.sh"]
