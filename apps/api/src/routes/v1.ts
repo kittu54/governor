@@ -7,6 +7,9 @@ import { metricsRoutes } from "../modules/metrics/routes";
 import { eventsRoutes } from "../modules/events/routes";
 import { ingestRoutes } from "../modules/ingest/routes";
 import { runsRoutes } from "../modules/runs/routes";
+import { agentsRoutes } from "../modules/agents/routes";
+import { gatewayRoutes } from "../modules/gateway/routes";
+import { apiKeyRoutes } from "../modules/apikeys/routes";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(evaluateRoutes);
@@ -17,4 +20,7 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(eventsRoutes, { prefix: "/events" });
   await app.register(ingestRoutes, { prefix: "/ingest" });
   await app.register(runsRoutes, { prefix: "/runs" });
+  await app.register(agentsRoutes, { prefix: "/agents" });
+  await app.register(gatewayRoutes, { prefix: "/gateway" });
+  await app.register(apiKeyRoutes, { prefix: "/api-keys" });
 };

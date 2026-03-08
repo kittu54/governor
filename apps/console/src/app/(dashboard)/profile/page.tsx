@@ -1,10 +1,37 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { resolveOrgId } from "@/lib/org";
-import { User, Shield, Building2, Key, Clock } from "lucide-react";
+import { apiGet } from "@/lib/api";
+import { User, Shield, Building2, Key, Bot, Layers, Clock, ArrowRight } from "lucide-react";
+
+interface OverviewResponse {
+  kpis: {
+    tool_calls: number;
+    blocked_pct: number;
+    pending_approvals: number;
+    estimated_cost_usd: number;
+    run_count?: number;
+  };
+}
+
+interface AgentsResponse {
+  agents: Array<{ id: string; name: string; status: string }>;
+}
 
 export default async function ProfilePage() {
   const orgId = await resolveOrgId();
+  const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  const [overview, agentsData] = await Promise.all([
+    apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => ({
+      kpis: { tool_calls: 0, blocked_pct: 0, pending_approvals: 0, estimated_cost_usd: 0, run_count: 0 }
+    })),
+    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] }))
+  ]);
+
+  const activeAgents = agentsData.agents.filter(a => a.status === "ACTIVE").length;
 
   return (
     <div className="space-y-6">
@@ -17,10 +44,12 @@ export default async function ProfilePage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-foreground">Console User</h1>
+                <h1 className="text-2xl font-bold text-foreground">
+                  {clerkEnabled ? "Clerk User" : "Console Admin"}
+                </h1>
                 <Badge variant="success">Active</Badge>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">Governor Control Tower Administrator</p>
+              <p className="mt-1 text-sm text-muted-foreground">Governor Control Tower — {clerkEnabled ? "Authenticated" : "Local Mode"}</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 <Badge variant="secondary">
                   <Shield className="mr-1 h-3 w-3" />
@@ -36,8 +65,45 @@ export default async function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* User Info */}
+      {/* Org Overview */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Active Agents</p>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-foreground">{activeAgents}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary" />
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tool Calls</p>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-foreground">{overview.kpis.tool_calls.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-400" />
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Pending Approvals</p>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-amber-400">{overview.kpis.pending_approvals}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Cost</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">${overview.kpis.estimated_cost_usd.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Account Details */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -48,75 +114,62 @@ export default async function ProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Role</span>
-                <span className="text-sm font-medium text-foreground">Administrator</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Organization</span>
-                <span className="text-sm font-mono font-medium text-foreground">{orgId}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Auth Provider</span>
-                <span className="text-sm font-medium text-foreground">
-                  {process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? "Clerk" : "Local Mode"}
-                </span>
-              </div>
+              <DetailRow label="Role" value="Administrator" />
+              <DetailRow label="Organization" value={orgId} mono />
+              <DetailRow label="Auth Provider" value={clerkEnabled ? "Clerk" : "Local Mode"} />
+              <DetailRow label="Agents Managed" value={String(agentsData.agents.length)} />
             </div>
           </CardContent>
         </Card>
 
+        {/* Your Agents */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-muted-foreground" />
-              <CardTitle>Permissions</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <CardTitle>Your Agents</CardTitle>
+              </div>
+              <Link href={"/agents" as Route} className="flex items-center gap-1 text-sm text-primary hover:underline">
+                View all <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
-            <CardDescription>Your access level and capabilities</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {[
-                { label: "View Dashboard", granted: true },
-                { label: "Manage Policies", granted: true },
-                { label: "Approve/Deny Requests", granted: true },
-                { label: "Register Agents", granted: true },
-                { label: "View Audit Logs", granted: true },
-                { label: "Manage Organization", granted: true }
-              ].map((perm) => (
-                <div key={perm.label} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-2.5">
-                  <span className="text-sm text-foreground">{perm.label}</span>
-                  <Badge variant={perm.granted ? "success" : "destructive"}>
-                    {perm.granted ? "Granted" : "Denied"}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+            {agentsData.agents.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">No agents registered.</p>
+            ) : (
+              <div className="space-y-2">
+                {agentsData.agents.slice(0, 5).map((agent) => (
+                  <Link
+                    key={agent.id}
+                    href={`/agents/${agent.id}?org_id=${orgId}` as Route}
+                    className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 transition-colors hover:border-primary/40"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-sm font-medium text-foreground">{agent.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{agent.id}</span>
+                    </div>
+                    <Badge variant={agent.status === "ACTIVE" ? "success" : "secondary"} className="text-[10px]">
+                      {agent.status}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
 
-      {/* Activity */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <CardTitle>Recent Activity</CardTitle>
-          </div>
-          <CardDescription>Your recent actions in the control tower</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
-              <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <div className="flex-1">
-                <p className="text-sm text-foreground">Logged into Control Tower</p>
-                <p className="text-xs text-muted-foreground">Current session</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className={`text-sm font-medium text-foreground ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }

@@ -1,10 +1,15 @@
+import Link from "next/link";
+import type { Route } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CallsCostChart } from "@/components/charts/calls-cost-chart";
 import { DecisionPieChart } from "@/components/charts/decision-pie-chart";
 import { apiGet } from "@/lib/api";
 import { resolveOrgId } from "@/lib/org";
-import { Activity, ShieldAlert, Clock, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  Activity, ShieldAlert, Clock, DollarSign, TrendingUp, TrendingDown,
+  ArrowRight, Bot, Layers, ShieldCheck
+} from "lucide-react";
 
 interface OverviewResponse {
   kpis: {
@@ -17,13 +22,23 @@ interface OverviewResponse {
   decision_breakdown: Array<{ decision: string; value: number }>;
 }
 
+interface AgentsResponse {
+  agents: Array<{
+    id: string;
+    name: string;
+    orgId: string;
+    status?: string;
+    description?: string | null;
+    stats?: {
+      total_runs: number;
+      total_audit_events: number;
+      pending_approvals: number;
+    };
+  }>;
+}
+
 const fallback: OverviewResponse = {
-  kpis: {
-    tool_calls: 0,
-    blocked_pct: 0,
-    pending_approvals: 0,
-    estimated_cost_usd: 0
-  },
+  kpis: { tool_calls: 0, blocked_pct: 0, pending_approvals: 0, estimated_cost_usd: 0 },
   calls_series: [],
   decision_breakdown: [
     { decision: "ALLOW", value: 0 },
@@ -34,7 +49,10 @@ const fallback: OverviewResponse = {
 
 export default async function OverviewPage() {
   const orgId = await resolveOrgId();
-  const overview = await apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => fallback);
+  const [overview, agents] = await Promise.all([
+    apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => fallback),
+    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] }))
+  ]);
 
   const totalDecisions = overview.decision_breakdown.reduce((sum, d) => sum + d.value, 0);
   const allowRate = totalDecisions > 0
@@ -43,6 +61,10 @@ export default async function OverviewPage() {
 
   const avgDailyCost = overview.calls_series.length > 0
     ? overview.calls_series.reduce((sum, d) => sum + d.cost, 0) / overview.calls_series.length
+    : 0;
+
+  const costTrend = overview.calls_series.length >= 2
+    ? overview.calls_series[overview.calls_series.length - 1].cost - overview.calls_series[overview.calls_series.length - 2].cost
     : 0;
 
   const cards = [
@@ -65,7 +87,8 @@ export default async function OverviewPage() {
       value: overview.kpis.pending_approvals.toLocaleString(),
       icon: Clock,
       trend: overview.kpis.pending_approvals > 5 ? "attention" : "clear",
-      color: overview.kpis.pending_approvals > 5 ? "text-amber-400" : "text-primary"
+      color: overview.kpis.pending_approvals > 5 ? "text-amber-400" : "text-primary",
+      href: "/approvals" as Route
     },
     {
       label: "Estimated Cost",
@@ -82,8 +105,8 @@ export default async function OverviewPage() {
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
-          return (
-            <Card key={card.label} className="overflow-hidden">
+          const inner = (
+            <Card key={card.label} className={`overflow-hidden transition-colors ${card.href ? "hover:border-primary/40" : ""}`}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div>
@@ -107,6 +130,11 @@ export default async function OverviewPage() {
               </CardContent>
             </Card>
           );
+          return card.href ? (
+            <Link key={card.label} href={card.href}>{inner}</Link>
+          ) : (
+            <div key={card.label}>{inner}</div>
+          );
         })}
       </section>
 
@@ -117,7 +145,7 @@ export default async function OverviewPage() {
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Allow Rate</p>
             <p className="mt-1 text-2xl font-bold text-emerald-400">{allowRate.toFixed(1)}%</p>
             <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-              <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.min(allowRate, 100)}%` }} />
+              <div className="h-full rounded-full bg-emerald-500/70 transition-all" style={{ width: `${Math.min(allowRate, 100)}%` }} />
             </div>
           </CardContent>
         </Card>
@@ -132,7 +160,15 @@ export default async function OverviewPage() {
           <CardContent className="p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg Daily Cost</p>
             <p className="mt-1 text-2xl font-bold text-foreground">${avgDailyCost.toFixed(2)}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Over the last {overview.calls_series.length} days</p>
+            <div className="mt-2 flex items-center gap-1 text-xs">
+              {costTrend > 0 ? (
+                <><TrendingUp className="h-3 w-3 text-red-400" /><span className="text-red-400">+${costTrend.toFixed(2)} vs prior day</span></>
+              ) : costTrend < 0 ? (
+                <><TrendingDown className="h-3 w-3 text-emerald-400" /><span className="text-emerald-400">${costTrend.toFixed(2)} vs prior day</span></>
+              ) : (
+                <span className="text-muted-foreground">Over the last {overview.calls_series.length} days</span>
+              )}
+            </div>
           </CardContent>
         </Card>
       </section>
@@ -177,6 +213,105 @@ export default async function OverviewPage() {
             </div>
           </CardContent>
         </Card>
+      </section>
+
+      {/* Active Agents Summary */}
+      {agents.agents.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Active Agents</CardTitle>
+                <CardDescription>Agents registered in your organization</CardDescription>
+              </div>
+              <Link href={"/agents" as Route} className="flex items-center gap-1 text-sm text-primary hover:underline">
+                View all <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {agents.agents.slice(0, 6).map((agent) => (
+                <Link
+                  key={agent.id}
+                  href={`/agents/${agent.id}?org_id=${orgId}` as Route}
+                  className="group rounded-lg border border-border bg-muted/30 p-4 transition-colors hover:border-primary/40"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">{agent.name}</p>
+                        <Badge variant={agent.status === "ACTIVE" ? "success" : "secondary"} className="text-[9px]">{agent.status ?? "ACTIVE"}</Badge>
+                      </div>
+                      <p className="mt-0.5 font-mono text-xs text-muted-foreground">{agent.id}</p>
+                      {agent.description && (
+                        <p className="mt-1 max-w-full truncate text-xs text-muted-foreground">{agent.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  {agent.stats && (
+                    <div className="mt-3 flex gap-3 text-xs text-muted-foreground">
+                      <span>{agent.stats.total_runs} runs</span>
+                      <span>{agent.stats.total_audit_events} events</span>
+                      {agent.stats.pending_approvals > 0 && (
+                        <span className="text-amber-400">{agent.stats.pending_approvals} pending</span>
+                      )}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick Links */}
+      <section className="grid gap-4 sm:grid-cols-3">
+        <Link href={"/runs" as Route}>
+          <Card className="group transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-primary/10 p-3">
+                <Layers className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground group-hover:text-primary">Run Explorer</p>
+                <p className="text-xs text-muted-foreground">Browse agent execution telemetry</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-primary" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={"/approvals" as Route}>
+          <Card className="group transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-amber-500/10 p-3">
+                <Clock className="h-5 w-5 text-amber-400" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground group-hover:text-primary">Approvals</p>
+                <p className="text-xs text-muted-foreground">{overview.kpis.pending_approvals} pending requests</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-primary" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={"/policy-studio" as Route}>
+          <Card className="group transition-colors hover:border-primary/40">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-emerald-500/10 p-3">
+                <ShieldCheck className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground group-hover:text-primary">Policy Studio</p>
+                <p className="text-xs text-muted-foreground">Manage governance rules</p>
+              </div>
+              <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-primary" />
+            </CardContent>
+          </Card>
+        </Link>
       </section>
     </div>
   );

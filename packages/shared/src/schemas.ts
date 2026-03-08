@@ -55,7 +55,12 @@ export const rateLimitSchema = z.object({
   calls_per_minute: z.number().int().min(1)
 });
 
-const runtimeSourceSchema = z.enum(["OPENAI", "ANTHROPIC", "GEMINI", "LANGCHAIN", "MCP", "CUSTOM"]);
+const runtimeSourceSchema = z.enum([
+  "OPENAI", "ANTHROPIC", "GEMINI", "LANGCHAIN", "MCP", "CUSTOM",
+  "ZAPIER", "MINDSTUDIO", "LINDY", "AGENTGPT", "RELEVANCE_AI",
+  "COPILOT_STUDIO", "VERTEX_AI", "AGENTFORCE", "WATSONX",
+  "CREWAI", "AUTOGEN", "PYDANTIC_AI", "N8N", "MAKE", "WEBHOOK"
+]);
 
 const agentEventTypeSchema = z.enum([
   "RUN_STARTED",
@@ -129,4 +134,43 @@ export const ingestEventsRequestSchema = z.object({
 
 export const runAnalyzeSchema = z.object({
   question: z.string().min(1)
+});
+
+export const gatewayCheckSchema = z.object({
+  agent_id: z.string().min(1),
+  tool_name: z.string().min(1),
+  tool_action: z.string().min(1),
+  cost_estimate_usd: z.number().min(0).default(0),
+  input_summary: z.string().optional(),
+  user_id: z.string().optional(),
+  session_id: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+});
+
+export const createAgentSchema = z.object({
+  id: z.string().min(1).regex(/^[a-zA-Z0-9_-]+$/, "Agent ID must be alphanumeric with underscores/hyphens"),
+  org_id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]).default("ACTIVE"),
+  framework: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  allowed_tools: z.array(z.object({
+    tool_name: z.string().min(1),
+    tool_action: z.string().min(1).default("*")
+  })).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+});
+
+export const updateAgentSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]).optional(),
+  framework: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional().nullable(),
+  allowed_tools: z.array(z.object({
+    tool_name: z.string().min(1),
+    tool_action: z.string().min(1).default("*")
+  })).optional().nullable(),
+  metadata: z.record(z.string(), z.unknown()).optional().nullable()
 });

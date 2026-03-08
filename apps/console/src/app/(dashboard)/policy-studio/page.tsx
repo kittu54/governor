@@ -35,14 +35,25 @@ interface PoliciesResponse {
   }>;
 }
 
+interface AgentsResponse {
+  agents: Array<{
+    id: string;
+    name: string;
+    status: string;
+  }>;
+}
+
 export default async function PolicyStudioPage() {
   const orgId = await resolveOrgId();
-  const policies = await apiGet<PoliciesResponse>(`/v1/policies?org_id=${orgId}`).catch(() => ({
-    rules: [],
-    thresholds: [],
-    budgets: [],
-    rate_limits: []
-  }));
+  const [policies, agentsData] = await Promise.all([
+    apiGet<PoliciesResponse>(`/v1/policies?org_id=${orgId}`).catch(() => ({
+      rules: [],
+      thresholds: [],
+      budgets: [],
+      rate_limits: []
+    })),
+    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] }))
+  ]);
 
-  return <PolicyStudioClient orgId={orgId} initialPolicies={policies} />;
+  return <PolicyStudioClient orgId={orgId} initialPolicies={policies} agents={agentsData.agents} />;
 }

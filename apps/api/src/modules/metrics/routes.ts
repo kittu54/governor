@@ -233,4 +233,104 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
     return { providers: rows };
   });
+
+  app.get("/frameworks", async (request) => {
+    const query = request.query as { org_id?: string; days?: string };
+    const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [agents, audits, runs, apiKeys] = await Promise.all([
+      app.prisma.agent.findMany({
+        where: { orgId: query.org_id },
+        select: { id: true, framework: true, status: true }
+      }),
+      app.prisma.auditEvent.findMany({
+        where: {
+          orgId: query.org_id,
+          timestamp: { gte: since }
+        },
+        select: { agentId: true, decision: true, costEstimateUsd: true }
+      }),
+      app.prisma.agentRun.findMany({
+        where: {
+          orgId: query.org_id,
+          startedAt: { gte: since }
+        },
+        select: { agentId: true, totalCostUsd: true, status: true }
+      }),
+      app.prisma.apiKey.findMany({
+        where: { orgId: query.org_id, revokedAt: null },
+        select: { framework: true, lastUsedAt: true }
+      })
+    ]);
+
+    const agentFramework = new Map<string, string>();
+    for (const a of agents) {
+      agentFramework.set(a.id, a.framework ?? "unknown");
+    }
+
+    const frameworkMap = new Map<string, {
+      agents: number;
+      active_agents: number;
+      tool_calls: number;
+      runs: number;
+      cost_usd: number;
+      denied: number;
+      allowed: number;
+      approval_required: number;
+      errors: number;
+      api_keys: number;
+    }>();
+
+    function getOrCreate(fw: string) {
+      if (!frameworkMap.has(fw)) {
+        frameworkMap.set(fw, {
+          agents: 0, active_agents: 0, tool_calls: 0, runs: 0,
+          cost_usd: 0, denied: 0, allowed: 0, approval_required: 0, errors: 0, api_keys: 0
+        });
+      }
+      return frameworkMap.get(fw)!;
+    }
+
+    for (const a of agents) {
+      const fw = a.framework ?? "unknown";
+      const entry = getOrCreate(fw);
+      entry.agents += 1;
+      if (a.status === "ACTIVE") entry.active_agents += 1;
+    }
+
+    for (const audit of audits) {
+      const fw = agentFramework.get(audit.agentId) ?? "unknown";
+      const entry = getOrCreate(fw);
+      entry.tool_calls += 1;
+      entry.cost_usd += audit.costEstimateUsd;
+      if (audit.decision === "ALLOW") entry.allowed += 1;
+      else if (audit.decision === "DENY") entry.denied += 1;
+      else entry.approval_required += 1;
+    }
+
+    for (const run of runs) {
+      const fw = agentFramework.get(run.agentId) ?? "unknown";
+      const entry = getOrCreate(fw);
+      entry.runs += 1;
+      if (run.status === "ERROR") entry.errors += 1;
+    }
+
+    for (const key of apiKeys) {
+      const fw = key.framework ?? "unknown";
+      const entry = getOrCreate(fw);
+      entry.api_keys += 1;
+    }
+
+    const frameworks = Array.from(frameworkMap.entries())
+      .map(([framework, stats]) => ({
+        framework,
+        ...stats,
+        cost_usd: Number(stats.cost_usd.toFixed(2)),
+        block_rate: stats.tool_calls > 0 ? Number(((stats.denied / stats.tool_calls) * 100).toFixed(1)) : 0
+      }))
+      .sort((a, b) => b.tool_calls - a.tool_calls);
+
+    return { frameworks };
+  });
 };

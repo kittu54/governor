@@ -172,6 +172,7 @@ export interface IngestRunInput {
   run_id: string;
   org_id: string;
   agent_id: string;
+  agent_name?: string;
   session_id?: string;
   user_id?: string;
   source: AgentRuntimeSource;

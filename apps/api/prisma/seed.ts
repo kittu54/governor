@@ -14,11 +14,46 @@ const orgs = [
 ];
 
 const agents = [
-  { id: "agent_support_1", orgId: "org_demo_1", name: "Support Agent" },
-  { id: "agent_finance_1", orgId: "org_demo_1", name: "Finance Agent" },
-  { id: "agent_ops_1", orgId: "org_demo_2", name: "Ops Agent" },
-  { id: "agent_research_1", orgId: "org_demo_2", name: "Research Agent" },
-  { id: "agent_growth_1", orgId: "org_demo_3", name: "Growth Agent" }
+  {
+    id: "agent_support_1", orgId: "org_demo_1", name: "Support Agent",
+    description: "Handles customer support tickets, processes refunds, and escalates issues via Slack.",
+    status: "ACTIVE" as const,
+    framework: "langchain",
+    tags: ["support", "tier-1", "production"],
+    allowedTools: [{ tool_name: "stripe", tool_action: "refund" }, { tool_name: "slack", tool_action: "post_message" }, { tool_name: "zendesk", tool_action: "*" }]
+  },
+  {
+    id: "agent_finance_1", orgId: "org_demo_1", name: "Finance Agent",
+    description: "Reconciles invoices, processes high-value refunds, and generates financial reports.",
+    status: "ACTIVE" as const,
+    framework: "crewai",
+    tags: ["finance", "high-value", "production"],
+    allowedTools: [{ tool_name: "stripe", tool_action: "*" }, { tool_name: "salesforce", tool_action: "update_record" }]
+  },
+  {
+    id: "agent_ops_1", orgId: "org_demo_2", name: "Ops Agent",
+    description: "Monitors infrastructure, responds to incidents, and manages CRM data syncing.",
+    status: "ACTIVE" as const,
+    framework: "n8n",
+    tags: ["ops", "infra", "production"],
+    allowedTools: [{ tool_name: "salesforce", tool_action: "*" }, { tool_name: "github", tool_action: "create_issue" }]
+  },
+  {
+    id: "agent_research_1", orgId: "org_demo_2", name: "Research Agent",
+    description: "Performs web research, summarizes findings, and updates knowledge bases.",
+    status: "ACTIVE" as const,
+    framework: "autogen",
+    tags: ["research", "read-only"],
+    allowedTools: [{ tool_name: "http", tool_action: "GET" }]
+  },
+  {
+    id: "agent_growth_1", orgId: "org_demo_3", name: "Growth Agent",
+    description: "Runs A/B tests, analyzes user funnels, and generates growth experiment reports.",
+    status: "ACTIVE" as const,
+    framework: "zapier",
+    tags: ["growth", "analytics", "production"],
+    allowedTools: [{ tool_name: "http", tool_action: "*" }, { tool_name: "slack", tool_action: "post_message" }]
+  }
 ];
 
 const tools = [

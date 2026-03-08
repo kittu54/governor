@@ -48,7 +48,9 @@ seed:
 test:
 	@$(PNPM) --filter @governor/shared build
 	@$(PNPM) --filter @governor/policy-engine build
+	@$(PNPM) --filter @governor/sdk build
 	@$(PNPM) --filter @governor/policy-engine test
+	@$(PNPM) --filter @governor/sdk test
 	@$(PNPM) --filter @governor/api test
 
 dev: ensure-env

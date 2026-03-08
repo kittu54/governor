@@ -41,6 +41,21 @@ enum EventSource {
   LANGCHAIN
   MCP
   CUSTOM
+  ZAPIER
+  MINDSTUDIO
+  LINDY
+  AGENTGPT
+  RELEVANCE_AI
+  COPILOT_STUDIO
+  VERTEX_AI
+  AGENTFORCE
+  WATSONX
+  CREWAI
+  AUTOGEN
+  PYDANTIC_AI
+  N8N
+  MAKE
+  WEBHOOK
 }
 
 enum AgentEventType {
@@ -68,13 +83,46 @@ model Organization {
   approvalRequests ApprovalRequest[]
   runs             AgentRun[]
   agentEvents      AgentEvent[]
+  apiKeys          ApiKey[]
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  keyHash     String   @unique
+  keyPrefix   String
+  framework   String?
+  scopes      Json?
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([keyHash])
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }
 
 model Agent {
   id               String              @id
   orgId            String
   name             String
+  description      String?
+  status           AgentStatus         @default(ACTIVE)
+  framework        String?
+  tags             Json?
+  allowedTools     Json?
+  metadata         Json?
   createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   organization     Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   audits           AuditEvent[]
   approvalRequests ApprovalRequest[]
@@ -82,6 +130,8 @@ model Agent {
   agentEvents      AgentEvent[]
 
   @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, framework])
 }
 
 model PolicyRule {
