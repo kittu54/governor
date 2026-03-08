@@ -23,7 +23,7 @@ interface AgentsResponse {
 
 export default async function AgentsPage() {
   const orgId = await resolveOrgId();
-  const data = await apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] }));
+  const data = await apiGet<AgentsResponse>(`/v1/agents`).catch(() => ({ agents: [] }));
 
   return <AgentsClient initialAgents={data.agents} orgId={orgId} />;
 }

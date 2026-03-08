@@ -114,7 +114,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
     setExpandedId(policyId);
     setVersionDetail(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/${policyId}/versions?org_id=${orgId}`);
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/${policyId}/versions`);
       if (res.ok) {
         const data = await res.json();
         setVersions(data.versions);
@@ -187,7 +187,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
         change_summary: formData.get("change_summary") || undefined,
       };
 
-      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/${policyId}/versions?org_id=${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/${policyId}/versions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -218,7 +218,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
   async function publishVersion(versionId: string, policyId: string, versionNumber: number) {
     setLoadingAction(versionId);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}/publish?org_id=${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}/publish`, {
         method: "POST",
       });
 
@@ -244,7 +244,7 @@ export function PolicySetsClient({ orgId, initialPolicies }: Props) {
   async function rollbackVersion(versionId: string, policyId: string, versionNumber: number) {
     setLoadingAction(versionId);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}/rollback-target?org_id=${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/v1/policies/v2/versions/${versionId}/rollback-target`, {
         method: "POST",
       });
 

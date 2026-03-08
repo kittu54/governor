@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,7 +88,7 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
     if (!form.tool_name || !form.tool_action) return;
     try {
       const res = await fetch(
-        `${API_BASE_URL}/v1/tools/classify-risk?org_id=${encodeURIComponent(orgId)}`,
+        `${API_BASE_URL}/v1/tools/classify-risk`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -158,11 +159,10 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
   return (
     <div className="space-y-6">
       {toast && (
-        <div className={`fixed right-6 top-6 z-50 animate-in fade-in slide-in-from-top-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${
-          toast.variant === "error"
-            ? "border-red-500/30 bg-red-950/80 text-red-300"
-            : "border-emerald-500/30 bg-emerald-950/80 text-emerald-300"
-        }`}>
+        <div className={`fixed right-6 top-6 z-50 animate-in fade-in slide-in-from-top-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${toast.variant === "error"
+          ? "border-red-500/30 bg-red-950/80 text-red-300"
+          : "border-emerald-500/30 bg-emerald-950/80 text-emerald-300"
+          }`}>
           {toast.text}
         </div>
       )}
@@ -334,11 +334,16 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
         <Card>
           <CardContent className="py-12 text-center">
             <Shield className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-6">
               {tools.length === 0
                 ? "No tools registered yet. Register tools to classify their risk and control governance behavior."
                 : "No tools match your filters."}
             </p>
+            {tools.length === 0 && (
+              <Link href="/quickstart" className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring gap-2">
+                Go to Quickstart
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -375,11 +380,10 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${
-                                tool.risk_severity >= 90 ? "bg-red-500" :
+                              className={`h-full rounded-full ${tool.risk_severity >= 90 ? "bg-red-500" :
                                 tool.risk_severity >= 70 ? "bg-orange-500" :
-                                tool.risk_severity >= 50 ? "bg-yellow-500" : "bg-green-500"
-                              }`}
+                                  tool.risk_severity >= 50 ? "bg-yellow-500" : "bg-green-500"
+                                }`}
                               style={{ width: `${tool.risk_severity}%` }}
                             />
                           </div>

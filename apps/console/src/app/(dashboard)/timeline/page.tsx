@@ -21,7 +21,7 @@ interface TimelineResponse {
 export default async function TimelinePage() {
   const resolvedOrgId = await resolveOrgId();
 
-  const timeline = await apiGet<TimelineResponse>(`/v1/audit/events?org_id=${resolvedOrgId}&limit=100`).catch(() => ({ events: [] }));
+  const timeline = await apiGet<TimelineResponse>(`/v1/audit/events?limit=100`).catch(() => ({ events: [] }));
 
   return <TimelineClient orgId={resolvedOrgId} initialEvents={timeline.events} />;
 }

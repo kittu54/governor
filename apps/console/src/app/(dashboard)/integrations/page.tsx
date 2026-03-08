@@ -35,8 +35,8 @@ export default async function IntegrationsPage() {
   const orgId = await resolveOrgId();
 
   const [keysData, frameworksData] = await Promise.all([
-    apiGet<KeysResponse>(`/v1/api-keys?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ keys: [] })),
-    apiGet<FrameworksResponse>(`/v1/metrics/frameworks?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ frameworks: [] }))
+    apiGet<KeysResponse>(`/v1/api-keys`).catch(() => ({ keys: [] })),
+    apiGet<FrameworksResponse>(`/v1/metrics/frameworks`).catch(() => ({ frameworks: [] }))
   ]);
 
   return (

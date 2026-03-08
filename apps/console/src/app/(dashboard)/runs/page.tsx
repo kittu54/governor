@@ -24,7 +24,7 @@ interface RunsResponse {
 
 export default async function RunsPage() {
   const orgId = await resolveOrgId();
-  const data = await apiGet<RunsResponse>(`/v1/runs?org_id=${encodeURIComponent(orgId)}&limit=200`).catch(() => ({ runs: [] }));
+  const data = await apiGet<RunsResponse>(`/v1/runs?limit=200`).catch(() => ({ runs: [] }));
 
   return <RunsClient orgId={orgId} runs={data.runs} />;
 }

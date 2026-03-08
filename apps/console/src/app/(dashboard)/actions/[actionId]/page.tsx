@@ -13,7 +13,7 @@ export default async function ActionReviewPage({
   const orgId = await resolveOrgId();
 
   const action = await apiGet<any>(
-    `/v1/actions/${encodeURIComponent(actionId)}?org_id=${encodeURIComponent(orgId)}`
+    `/v1/actions/${encodeURIComponent(actionId)}`
   ).catch(() => null);
 
   return <ActionReviewClient action={action} orgId={orgId} />;

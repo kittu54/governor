@@ -75,21 +75,21 @@ interface VersionsResponse {
 export default async function PolicyStudioPage() {
   const orgId = await resolveOrgId();
   const [policies, agentsData, v2Policies] = await Promise.all([
-    apiGet<PoliciesResponse>(`/v1/policies?org_id=${orgId}`).catch(() => ({
+    apiGet<PoliciesResponse>(`/v1/policies`).catch(() => ({
       rules: [],
       thresholds: [],
       budgets: [],
       rate_limits: []
     })),
-    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] })),
-    apiGet<V2PoliciesResponse>(`/v1/policies/v2?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ policies: [] })),
+    apiGet<AgentsResponse>(`/v1/agents`).catch(() => ({ agents: [] })),
+    apiGet<V2PoliciesResponse>(`/v1/policies/v2`).catch(() => ({ policies: [] })),
   ]);
 
   const allVersions: { id: string; version_number: number; checksum: string; is_published: boolean; policy_name?: string }[] = [];
   for (const p of v2Policies.policies) {
     if (p.version_count > 0) {
       const versionsData = await apiGet<VersionsResponse>(
-        `/v1/policies/v2/${p.id}/versions?org_id=${encodeURIComponent(orgId)}`
+        `/v1/policies/v2/${p.id}/versions`
       ).catch(() => ({ versions: [] }));
       for (const v of versionsData.versions) {
         allVersions.push({ ...v, policy_name: p.name });

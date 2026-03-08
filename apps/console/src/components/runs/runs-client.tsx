@@ -234,7 +234,7 @@ export function RunsClient({ orgId, runs }: RunsClientProps) {
                     <TableCell className="text-muted-foreground">{new Date(run.started_at).toLocaleString()}</TableCell>
                     <TableCell className="font-mono text-xs">{run.id.slice(0, 16)}...</TableCell>
                     <TableCell>
-                      <Link href={`/agents/${run.agent_id}?org_id=${encodeURIComponent(orgId)}` as Route} className="font-mono text-xs text-primary hover:underline">
+                      <Link href={`/agents/${run.agent_id}` as Route} className="font-mono text-xs text-primary hover:underline">
                         {run.agent_id}
                       </Link>
                     </TableCell>
@@ -256,7 +256,7 @@ export function RunsClient({ orgId, runs }: RunsClientProps) {
                     </TableCell>
                     <TableCell className="font-mono">${run.total_cost_usd.toFixed(4)}</TableCell>
                     <TableCell>
-                      <Link href={`/runs/${run.id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-sm font-medium text-primary hover:underline">
+                      <Link href={`/runs/${run.id}` as Route} className="text-sm font-medium text-primary hover:underline">
                         Open
                       </Link>
                     </TableCell>

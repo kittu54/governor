@@ -25,10 +25,10 @@ export default async function ProfilePage() {
   const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
   const [overview, agentsData] = await Promise.all([
-    apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => ({
+    apiGet<OverviewResponse>(`/v1/metrics/overview`).catch(() => ({
       kpis: { tool_calls: 0, blocked_pct: 0, pending_approvals: 0, estimated_cost_usd: 0, run_count: 0 }
     })),
-    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] }))
+    apiGet<AgentsResponse>(`/v1/agents`).catch(() => ({ agents: [] }))
   ]);
 
   const activeAgents = agentsData.agents.filter(a => a.status === "ACTIVE").length;
@@ -143,7 +143,7 @@ export default async function ProfilePage() {
                 {agentsData.agents.slice(0, 5).map((agent) => (
                   <Link
                     key={agent.id}
-                    href={`/agents/${agent.id}?org_id=${orgId}` as Route}
+                    href={`/agents/${agent.id}` as Route}
                     className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 transition-colors hover:border-primary/40"
                   >
                     <div className="flex items-center gap-2">

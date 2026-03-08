@@ -145,11 +145,10 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
     <div className="space-y-6">
       {/* Toast */}
       {toast && (
-        <div className={`fixed right-6 top-6 z-50 animate-in fade-in slide-in-from-top-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${
-          toast.variant === "error"
+        <div className={`fixed right-6 top-6 z-50 animate-in fade-in slide-in-from-top-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${toast.variant === "error"
             ? "border-red-500/30 bg-red-950/80 text-red-300"
             : "border-emerald-500/30 bg-emerald-950/80 text-emerald-300"
-        }`}>
+          }`}>
           {toast.text}
         </div>
       )}
@@ -363,25 +362,30 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Bot className="mb-3 h-10 w-10 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mb-6">
                 {agents.length === 0
                   ? "No agents registered. Click 'Register Agent' to get started."
                   : "No agents match your filters."}
               </p>
+              {agents.length === 0 && (
+                <Link href="/quickstart" className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  Go to Quickstart
+                </Link>
+              )}
             </div>
           ) : (
             <Table>
               <TableHeader>
-              <TableRow>
-                <TableHead>Agent</TableHead>
-                <TableHead>Platform</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Tags</TableHead>
-                <TableHead>Runs</TableHead>
-                <TableHead>Pending</TableHead>
-                <TableHead />
-              </TableRow>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Platform</TableHead>
+                  <TableHead>Environment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tags</TableHead>
+                  <TableHead>Runs</TableHead>
+                  <TableHead>Pending</TableHead>
+                  <TableHead />
+                </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((agent) => (
@@ -419,7 +423,7 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
                     <TableCell>
                       <Badge variant={
                         agent.status === "ACTIVE" ? "success" :
-                        agent.status === "SUSPENDED" ? "destructive" : "secondary"
+                          agent.status === "SUSPENDED" ? "destructive" : "secondary"
                       }>
                         {agent.status}
                       </Badge>
@@ -441,7 +445,7 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
                     </TableCell>
                     <TableCell>
                       <Link
-                        href={`/agents/${agent.id}?org_id=${encodeURIComponent(orgId)}` as Route}
+                        href={`/agents/${agent.id}` as Route}
                         className="text-sm font-medium text-primary hover:underline"
                       >
                         Manage

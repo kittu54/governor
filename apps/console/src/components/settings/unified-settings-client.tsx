@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, lazy, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -97,11 +98,10 @@ export function UnifiedSettingsClient({ orgId, apiBaseUrl, clerkEnabled, usage, 
             <button
               key={tab.id}
               onClick={() => switchTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${activeTab === tab.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
             >
               <Icon className="h-4 w-4" />
               {tab.label}
@@ -172,7 +172,7 @@ function GeneralTab({ orgId, apiBaseUrl, clerkEnabled }: { orgId: string; apiBas
         if (typeof parsed.sseStreaming === "boolean") setSseStreaming(parsed.sseStreaming);
         if (typeof parsed.autoRefresh === "boolean") setAutoRefresh(parsed.autoRefresh);
       }
-    } catch {}
+    } catch { }
   }, []);
 
   function persist(updates: Record<string, boolean>) {
@@ -441,14 +441,14 @@ function ApiKeysTab({ orgId, initialKeys }: { orgId: string; initialKeys: ApiKey
         setNewKeyName("");
         setKeys((prev) => [{ id: data.id, name: data.name, keyPrefix: data.key_prefix, createdAt: new Date().toISOString(), revokedAt: null, lastUsedAt: null, expiresAt: null }, ...prev]);
       }
-    } catch {} finally { setLoading(false); }
+    } catch { } finally { setLoading(false); }
   }
 
   async function revokeKey(keyId: string) {
     try {
       await fetch(`${API_BASE_URL}/v1/api-keys/${keyId}`, { method: "DELETE" });
       setKeys((prev) => prev.map((k) => k.id === keyId ? { ...k, revokedAt: new Date().toISOString() } : k));
-    } catch {}
+    } catch { }
   }
 
   function copyKey() {
@@ -487,7 +487,12 @@ function ApiKeysTab({ orgId, initialKeys }: { orgId: string; initialKeys: ApiKey
         <CardHeader><CardTitle>Active Keys ({activeKeys.length})</CardTitle></CardHeader>
         <CardContent>
           {activeKeys.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No active API keys. Create one above.</p>
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <p className="text-sm text-muted-foreground mb-4">No active API keys. Create one above.</p>
+              <Link href="/quickstart" className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                Go to Quickstart
+              </Link>
+            </div>
           ) : (
             <div className="space-y-2">
               {activeKeys.map((k) => (

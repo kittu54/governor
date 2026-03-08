@@ -69,7 +69,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ runI
 
   const orgId = await resolveOrgId();
 
-  const data = await apiGet<RunDetailResponse>(`/v1/runs/${runId}?org_id=${encodeURIComponent(orgId)}`).catch(() => null);
+  const data = await apiGet<RunDetailResponse>(`/v1/runs/${runId}`).catch(() => null);
 
   if (!data) {
     return (

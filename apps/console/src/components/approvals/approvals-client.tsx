@@ -279,7 +279,7 @@ export function ApprovalsClient({ initialApprovals, orgId }: ApprovalsClientProp
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{new Date(approval.requested_at).toLocaleString()}</TableCell>
                         <TableCell>
-                          <Link href={`/agents/${approval.agent_id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-primary hover:underline">
+                          <Link href={`/agents/${approval.agent_id}` as Route} className="text-primary hover:underline">
                             <span className="text-sm font-medium">{approval.agent_name ?? approval.agent_id}</span>
                           </Link>
                           {approval.agent_framework && (

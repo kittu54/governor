@@ -28,7 +28,7 @@ export default async function BillingPage() {
   const orgId = await resolveOrgId();
 
   const [usage, plans] = await Promise.all([
-    apiGet<UsageData>(`/v1/billing/usage?org_id=${encodeURIComponent(orgId)}`).catch(() => null),
+    apiGet<UsageData>(`/v1/billing/usage`).catch(() => null),
     apiGet<PlansData>("/v1/billing/plans").catch(() => ({ plans: [] })),
   ]);
 

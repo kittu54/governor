@@ -22,7 +22,7 @@ export default async function AuditPage() {
   const orgId = await resolveOrgId();
 
   const data = await apiGet<AuditResponse>(
-    `/v1/audit-log?org_id=${encodeURIComponent(orgId)}&limit=100`
+    `/v1/audit-log?limit=100`
   ).catch(() => ({ entries: [] as AuditResponse["entries"], total: 0 }));
 
   return <AuditExplorerClient entries={data.entries} total={data.total} orgId={orgId} />;

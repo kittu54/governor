@@ -9,10 +9,10 @@ export default async function ActionsPage() {
 
   const [actionsData, stats] = await Promise.all([
     apiGet<{ actions: unknown[]; total: number }>(
-      `/v1/actions?org_id=${encodeURIComponent(orgId)}&limit=50`
+      `/v1/actions?limit=50`
     ).catch(() => ({ actions: [] as unknown[], total: 0 })),
     apiGet<any>(
-      `/v1/actions/stats?org_id=${encodeURIComponent(orgId)}&period=24h`
+      `/v1/actions/stats?period=24h`
     ).catch(() => null),
   ]);
 

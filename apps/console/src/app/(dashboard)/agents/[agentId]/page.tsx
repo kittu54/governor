@@ -56,7 +56,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ ag
   const orgId = await resolveOrgId();
 
   const data = await apiGet<AgentDetailResponse>(
-    `/v1/agents/${encodeURIComponent(agentId)}?org_id=${encodeURIComponent(orgId)}`
+    `/v1/agents/${encodeURIComponent(agentId)}`
   ).catch(() => null);
 
   if (!data) {

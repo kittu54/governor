@@ -55,13 +55,13 @@ export default async function SettingsPage() {
   const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
   const [usage, plans, agents, overview, keys] = await Promise.all([
-    apiGet<UsageData>(`/v1/billing/usage?org_id=${encodeURIComponent(orgId)}`).catch(() => null),
+    apiGet<UsageData>(`/v1/billing/usage`).catch(() => null),
     apiGet<PlansData>("/v1/billing/plans").catch(() => ({ plans: [] })),
-    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] })),
-    apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => ({
+    apiGet<AgentsResponse>(`/v1/agents`).catch(() => ({ agents: [] })),
+    apiGet<OverviewResponse>(`/v1/metrics/overview`).catch(() => ({
       kpis: { tool_calls: 0, blocked_pct: 0, pending_approvals: 0, estimated_cost_usd: 0 },
     })),
-    apiGet<KeysResponse>(`/v1/api-keys?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ keys: [] })),
+    apiGet<KeysResponse>(`/v1/api-keys`).catch(() => ({ keys: [] })),
   ]);
 
   return (

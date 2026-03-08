@@ -129,7 +129,7 @@ export function AlertsClient({ initialConfigs, orgId }: AlertsClientProps) {
 
   async function reload() {
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/alerts?org_id=${encodeURIComponent(orgId)}`);
+      const res = await fetch(`${API_BASE_URL}/v1/alerts`);
       if (res.ok) {
         const data = await res.json();
         setConfigs(data.configs ?? []);

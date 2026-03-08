@@ -277,7 +277,7 @@ export function ActionExplorerClient({ initialActions, initialTotal, initialStat
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Link href={`/agents/${action.agent_id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-primary hover:underline">
+                      <Link href={`/agents/${action.agent_id}` as Route} className="text-primary hover:underline">
                         <span className="text-sm font-medium">{action.agent_name}</span>
                       </Link>
                       {action.agent_framework && (
@@ -323,7 +323,7 @@ export function ActionExplorerClient({ initialActions, initialTotal, initialStat
                       {action.duration_ms != null ? `${action.duration_ms}ms` : "—"}
                     </TableCell>
                     <TableCell>
-                      <Link href={`/actions/${action.id}?org_id=${encodeURIComponent(orgId)}` as Route}>
+                      <Link href={`/actions/${action.id}` as Route}>
                         <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </Link>
                     </TableCell>

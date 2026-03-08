@@ -33,7 +33,7 @@ export default async function ApprovalsPage() {
   const resolvedOrgId = await resolveOrgId();
 
   const data = await apiGet<ApprovalsResponse>(
-    `/v1/approvals?org_id=${resolvedOrgId}&limit=100`
+    `/v1/approvals?limit=100`
   ).catch(() => ({ approvals: [] }));
 
   return <ApprovalsClient initialApprovals={data.approvals} orgId={resolvedOrgId} />;

@@ -70,7 +70,7 @@ export function TimelineClient({ orgId, initialEvents }: TimelineClientProps) {
   }, [query]);
 
   useEffect(() => {
-    const source = new EventSource(`${API_BASE_URL}/v1/events/stream?org_id=${orgId}`);
+    const source = new EventSource(`${API_BASE_URL}/v1/events/stream`);
 
     source.onmessage = (event) => {
       try {

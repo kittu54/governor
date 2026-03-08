@@ -31,7 +31,7 @@ export default async function ToolsPage() {
   const orgId = await resolveOrgId();
 
   const [toolsData, riskClassesData] = await Promise.all([
-    apiGet<ToolsResponse>(`/v1/tools?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ tools: [] as ToolsResponse["tools"] })),
+    apiGet<ToolsResponse>(`/v1/tools`).catch(() => ({ tools: [] as ToolsResponse["tools"] })),
     apiGet<RiskClassesResponse>(`/v1/tools/risk-classes`).catch(() => ({ risk_classes: [] as RiskClassesResponse["risk_classes"] })),
   ]);
 

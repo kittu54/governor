@@ -93,7 +93,7 @@ export function RunDetailClient({ runId, orgId, data }: RunDetailClientProps) {
   async function ask() {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/runs/${runId}/analyze?org_id=${encodeURIComponent(orgId)}`, {
+      const response = await fetch(`${API_BASE_URL}/v1/runs/${runId}/analyze`, {
         method: "POST",
         headers: {
           "content-type": "application/json"

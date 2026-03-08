@@ -83,10 +83,10 @@ const RISK_SEVERITY: Record<string, { label: string; color: string; bgColor: str
 export default async function OverviewPage() {
   const orgId = await resolveOrgId();
   const [overview, agents, riskMetrics, costs] = await Promise.all([
-    apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => fallback),
-    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] })),
-    apiGet<{ risk_classes: RiskClassMetric[] }>(`/v1/metrics/risk-classes?org_id=${orgId}`).catch(() => ({ risk_classes: [] })),
-    apiGet<CostsResponse>(`/v1/metrics/costs?org_id=${orgId}`).catch(() => ({ summary: { total_governed_cost_usd: 0, total_blocked_cost_usd: 0, total_run_cost_usd: 0 } })),
+    apiGet<OverviewResponse>(`/v1/metrics/overview`).catch(() => fallback),
+    apiGet<AgentsResponse>(`/v1/agents`).catch(() => ({ agents: [] })),
+    apiGet<{ risk_classes: RiskClassMetric[] }>(`/v1/metrics/risk-classes`).catch(() => ({ risk_classes: [] })),
+    apiGet<CostsResponse>(`/v1/metrics/costs`).catch(() => ({ summary: { total_governed_cost_usd: 0, total_blocked_cost_usd: 0, total_run_cost_usd: 0 } })),
   ]);
 
   const totalDecisions = overview.decision_breakdown.reduce((sum, d) => sum + d.value, 0);
@@ -356,7 +356,7 @@ export default async function OverviewPage() {
               {agents.agents.slice(0, 6).map((agent) => (
                 <Link
                   key={agent.id}
-                  href={`/agents/${agent.id}?org_id=${orgId}` as Route}
+                  href={`/agents/${agent.id}` as Route}
                   className="group rounded-lg border border-border bg-muted/30 p-4 transition-colors hover:border-primary/40"
                 >
                   <div className="flex items-center gap-3">

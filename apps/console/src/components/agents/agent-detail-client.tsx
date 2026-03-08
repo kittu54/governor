@@ -104,7 +104,7 @@ export function AgentDetailClient({ orgId, data }: AgentDetailClientProps) {
           return { tool_name: tool_name.trim(), tool_action: tool_action.trim() };
         });
 
-      const response = await fetch(`${API_BASE_URL}/v1/agents/${agent.id}?org_id=${encodeURIComponent(orgId)}`, {
+      const response = await fetch(`${API_BASE_URL}/v1/agents/${agent.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -427,7 +427,7 @@ export function AgentDetailClient({ orgId, data }: AgentDetailClientProps) {
                     <TableCell className="font-mono">${run.totalCostUsd.toFixed(4)}</TableCell>
                     <TableCell className="text-muted-foreground">{run.durationMs ? `${(run.durationMs / 1000).toFixed(1)}s` : "-"}</TableCell>
                     <TableCell>
-                      <Link href={`/runs/${run.id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-sm text-primary hover:underline">
+                      <Link href={`/runs/${run.id}` as Route} className="text-sm text-primary hover:underline">
                         Open
                       </Link>
                     </TableCell>

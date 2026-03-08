@@ -381,7 +381,7 @@ export function ActionReviewClient({ action, orgId }: ActionReviewProps) {
             <CardContent className="space-y-3">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Name</p>
-                <Link href={`/agents/${action.agent.id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-sm text-primary hover:underline font-medium">
+                <Link href={`/agents/${action.agent.id}` as Route} className="text-sm text-primary hover:underline font-medium">
                   {action.agent.name}
                 </Link>
               </div>
@@ -462,7 +462,7 @@ export function ActionReviewClient({ action, orgId }: ActionReviewProps) {
                 <CardTitle className="text-base">Linked Run</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Link href={`/runs/${action.linked_run.id}?org_id=${encodeURIComponent(orgId)}` as Route} className="text-primary hover:underline text-sm">
+                <Link href={`/runs/${action.linked_run.id}` as Route} className="text-primary hover:underline text-sm">
                   {action.linked_run.task_name ?? action.linked_run.id}
                 </Link>
                 <div className="flex items-center gap-2">

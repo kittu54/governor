@@ -23,7 +23,7 @@ export default async function MCPServersPage() {
   const orgId = await resolveOrgId();
 
   const data = await apiGet<MCPServersResponse>(
-    `/v1/mcp/servers?org_id=${encodeURIComponent(orgId)}`
+    `/v1/mcp/servers`
   ).catch(() => ({ servers: [] }));
 
   return <MCPServersClient orgId={orgId} initialServers={data.servers} />;

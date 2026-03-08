@@ -8,7 +8,7 @@ export default async function AlertsPage() {
   const orgId = await resolveOrgId();
 
   const data = await apiGet<{ configs: unknown[] }>(
-    `/v1/alerts?org_id=${encodeURIComponent(orgId)}`
+    `/v1/alerts`
   ).catch(() => ({ configs: [] as unknown[] }));
 
   return <AlertsClient initialConfigs={data.configs as any} orgId={orgId} />;
