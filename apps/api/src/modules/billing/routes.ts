@@ -75,8 +75,8 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/upgrade", async (request, reply) => {
-    const body = request.body as { org_id: string; plan: string };
-    if (!body.org_id || !body.plan) throw app.httpErrors.badRequest("org_id and plan required");
+    const body = request.body as { org_id?: string; plan: string };
+    if (!body.plan) throw app.httpErrors.badRequest("plan is required");
     const orgId = resolveRequestOrg(request, { fromBody: body.org_id });
 
     if (!["free", "pro", "enterprise"].includes(body.plan)) {

@@ -138,15 +138,16 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/classify-risk", async (request, reply) => {
     const payload = classifyRiskSchema.parse(request.body);
-    const authOrgId = request.auth?.orgId;
+    // classify-risk is semi-public (works without auth for anonymous classification)
+    // but if authenticated, enforce org_id mismatch protection
     const queryOrgId = (request.query as Record<string, string>)?.org_id;
-    const suppliedOrgId = queryOrgId;
-    if (authOrgId && suppliedOrgId && authOrgId !== suppliedOrgId) {
+    const authOrgId = request.auth?.orgId;
+    if (authOrgId && queryOrgId && authOrgId !== queryOrgId) {
       const err = new Error("org_id mismatch: supplied org_id does not match authenticated organization");
       (err as any).statusCode = 403;
       throw err;
     }
-    const orgId = authOrgId ?? suppliedOrgId;
+    const orgId = authOrgId ?? queryOrgId;
 
     let orgOverrides;
     if (orgId) {
@@ -189,15 +190,15 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: "Maximum 100 tools per batch" });
     }
 
+    // Semi-public: works without auth, but enforces mismatch when authenticated
     const authOrgId = request.auth?.orgId;
     const bodyOrgId = body.org_id;
-    const suppliedOrgId = bodyOrgId;
-    if (authOrgId && suppliedOrgId && authOrgId !== suppliedOrgId) {
+    if (authOrgId && bodyOrgId && authOrgId !== bodyOrgId) {
       const err = new Error("org_id mismatch: supplied org_id does not match authenticated organization");
       (err as any).statusCode = 403;
       throw err;
     }
-    const orgId = authOrgId ?? suppliedOrgId;
+    const orgId = authOrgId ?? bodyOrgId;
 
     let orgOverrides: import("@governor/shared").ToolRiskMapping[] | undefined;
     if (orgId) {

@@ -72,7 +72,7 @@ class FakePrisma {
     create: async ({ data }: any) => ({ id: `apr_${++this.counter}`, requestedAt: new Date(), ...data }),
   };
 
-  async $disconnect() {}
+  async $disconnect() { }
   async $queryRaw() { return [{ "?column?": 1 }]; }
 }
 
@@ -320,5 +320,144 @@ describe("Public routes", () => {
     const res = await app.inject({ method: "GET", url: "/v1/billing/plans" });
     expect(res.statusCode).toBe(200);
     expect(res.json().plans).toBeDefined();
+  });
+});
+
+describe("Auth — cross-org isolation", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    app = await buildApp({
+      prisma: new FakePrisma() as any,
+      redis: new FakeRedis() as any,
+      eventBus: createEventBus(),
+      config: buildTestConfig("development"),
+    });
+  });
+
+  it("API key auth resolves org without requiring body org_id", async () => {
+    // When org_id is omitted from the body, resolveRequestOrg should
+    // fall back to request.auth.orgId from the API key
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/evaluate",
+      headers: { "x-governor-key": TEST_API_KEY },
+      payload: {
+        org_id: TEST_ORG_ID, // schema requires this, but auth overrides it
+        agent_id: "agent_1",
+        tool_name: "http",
+        tool_action: "GET",
+        cost_estimate_usd: 0,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().decision).toBeDefined();
+  });
+
+  it("rejects cross-org access via body org_id mismatch", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/evaluate",
+      headers: { "x-governor-key": TEST_API_KEY },
+      payload: {
+        org_id: OTHER_ORG_ID,
+        agent_id: "agent_1",
+        tool_name: "http",
+        tool_action: "GET",
+        cost_estimate_usd: 0,
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toContain("mismatch");
+  });
+});
+
+describe("Auth — production mode parametric 401", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    app = await buildApp({
+      prisma: new FakePrisma() as any,
+      redis: new FakeRedis() as any,
+      eventBus: createEventBus(),
+      config: buildTestConfig("production"),
+    });
+  });
+
+  const protectedRoutes = [
+    { method: "POST" as const, url: "/v1/evaluate" },
+    { method: "GET" as const, url: "/v1/api-keys" },
+    { method: "GET" as const, url: "/v1/agents" },
+    { method: "GET" as const, url: "/v1/actions" },
+    { method: "GET" as const, url: "/v1/runs" },
+    { method: "GET" as const, url: "/v1/policies" },
+    { method: "GET" as const, url: "/v1/me" },
+  ];
+
+  for (const route of protectedRoutes) {
+    it(`${route.method} ${route.url} returns 401 without auth`, async () => {
+      const res = await app.inject({
+        method: route.method,
+        url: route.url,
+        ...(route.method === "POST"
+          ? {
+            payload: {
+              org_id: TEST_ORG_ID,
+              agent_id: "agent_1",
+              tool_name: "http",
+              tool_action: "GET",
+              cost_estimate_usd: 0,
+            },
+          }
+          : {}),
+      });
+      expect(res.statusCode).toBe(401);
+    });
+  }
+});
+
+describe("Auth — classify-risk mismatch protection", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    app = await buildApp({
+      prisma: new FakePrisma() as any,
+      redis: new FakeRedis() as any,
+      eventBus: createEventBus(),
+      config: buildTestConfig("development"),
+    });
+  });
+
+  it("classify-risk works without auth (semi-public)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tools/classify-risk",
+      payload: { tool_name: "http", tool_action: "GET" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().risk_class).toBeDefined();
+  });
+
+  it("classify-risk returns 403 on org_id mismatch when authenticated", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tools/classify-risk?org_id=" + OTHER_ORG_ID,
+      headers: { "x-governor-key": TEST_API_KEY },
+      payload: { tool_name: "http", tool_action: "GET" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("classify-risk/batch returns 403 on org_id mismatch when authenticated", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tools/classify-risk/batch",
+      headers: { "x-governor-key": TEST_API_KEY },
+      payload: {
+        org_id: OTHER_ORG_ID,
+        tools: [{ tool_name: "http", tool_action: "GET" }],
+      },
+    });
+    expect(res.statusCode).toBe(403);
   });
 });

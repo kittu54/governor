@@ -197,3 +197,14 @@ export function requireAuthenticated(request: FastifyRequest): void {
   (err as any).statusCode = 401;
   throw err;
 }
+
+/**
+ * Convenience wrapper: require authentication AND resolve orgId in one call.
+ * Returns the authenticated orgId or throws 401/403.
+ */
+export function requireOrgAuth(
+  request: FastifyRequest,
+  opts?: { fromQuery?: string; fromBody?: string }
+): string {
+  return resolveRequestOrg(request, opts);
+}
