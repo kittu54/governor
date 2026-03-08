@@ -1,8 +1,9 @@
 "use client";
 
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
-import { getClerkModeLabel, isClerkEnabled } from "@/lib/clerk";
+import { getClerkModeLabel, authMode } from "@/lib/clerk";
 import { Badge } from "@/components/ui/badge";
+import { SupabaseUserMenu } from "@/components/auth/supabase-user-menu";
 
 export function Topbar() {
   return (
@@ -15,7 +16,7 @@ export function Topbar() {
         <h2 className="text-xl font-semibold text-foreground">Operational Command Deck</h2>
       </div>
       <div className="flex items-center gap-3">
-        {isClerkEnabled ? (
+        {authMode === "clerk" ? (
           <>
             <OrganizationSwitcher
               appearance={{
@@ -27,6 +28,8 @@ export function Topbar() {
             />
             <UserButton afterSignOutUrl="/sign-in" />
           </>
+        ) : authMode === "supabase" ? (
+          <SupabaseUserMenu />
         ) : (
           <div className="rounded-lg border border-border bg-muted px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {getClerkModeLabel()}

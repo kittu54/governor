@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type ExperienceMode = "EASY" | "PRO" | "HARDCORE";
 
@@ -93,11 +93,8 @@ export function RunDetailClient({ runId, orgId, data }: RunDetailClientProps) {
   async function ask() {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/runs/${runId}/analyze`, {
+      const response = await apiFetch(`/v1/runs/${runId}/analyze`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
         body: JSON.stringify({ question })
       });
 

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import {
   Settings, User, CreditCard, Key, Globe, Shield, Bell, Palette, Database,
   Check, LogOut, Copy, Eye, EyeOff, Zap, TrendingUp, CheckCircle, ArrowRight,
@@ -423,9 +423,8 @@ function ApiKeysTab({ orgId, initialKeys }: { orgId: string; initialKeys: ApiKey
     if (!newKeyName.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/api-keys`, {
+      const res = await apiFetch(`/v1/api-keys`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ org_id: orgId, name: newKeyName }),
       });
       if (res.ok) {
@@ -440,7 +439,7 @@ function ApiKeysTab({ orgId, initialKeys }: { orgId: string; initialKeys: ApiKey
 
   async function revokeKey(keyId: string) {
     try {
-      await fetch(`${API_BASE_URL}/v1/api-keys/${keyId}`, { method: "DELETE" });
+      await apiFetch(`/v1/api-keys/${keyId}`, { method: "DELETE" });
       setKeys((prev) => prev.map((k) => k.id === keyId ? { ...k, revokedAt: new Date().toISOString() } : k));
     } catch { }
   }

@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { verifyToken } from "@clerk/backend";
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -48,6 +49,38 @@ async function autoProvisionClerkOrg(
   } catch (err) {
     app.log.warn({ err, orgId, userId }, "Auto-provision failed (non-fatal)");
   }
+}
+
+/**
+ * Verify a Supabase-issued JWT (HS256) using the project's JWT secret.
+ * Returns the decoded payload or null if verification fails.
+ */
+function verifySupabaseJwt(
+  token: string,
+  secret: string
+): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+
+  const [headerB64, payloadB64, signatureB64] = parts;
+  const expectedSig = createHmac("sha256", secret)
+    .update(`${headerB64}.${payloadB64}`)
+    .digest();
+
+  const actualSig = Buffer.from(signatureB64, "base64url");
+  if (expectedSig.length !== actualSig.length) return null;
+  if (!timingSafeEqual(expectedSig, actualSig)) return null;
+
+  const payload = JSON.parse(
+    Buffer.from(payloadB64, "base64url").toString("utf8")
+  ) as Record<string, unknown>;
+
+  // Check expiry
+  if (typeof payload.exp === "number" && payload.exp < Math.floor(Date.now() / 1000)) {
+    return null;
+  }
+
+  return payload;
 }
 
 const authPluginImpl: FastifyPluginAsync = async (app) => {
@@ -102,6 +135,32 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
             await autoProvisionClerkOrg(app, orgId, userId, orgRole, orgSlug);
           }
           return;
+        } catch {
+          // Token invalid — fall through
+        }
+      }
+
+      // 2b) Supabase JWT (HS256)
+      if (app.config.SUPABASE_JWT_SECRET) {
+        try {
+          const payload = verifySupabaseJwt(token, app.config.SUPABASE_JWT_SECRET);
+          if (payload) {
+            const userId = payload.sub as string | undefined;
+            const email = payload.email as string | undefined;
+            const appMeta = (payload.app_metadata ?? {}) as Record<string, unknown>;
+            const orgId = (appMeta.org_id ?? appMeta.organization_id) as string | undefined;
+            const orgRole = appMeta.org_role as string | undefined;
+
+            request.auth.userId = userId;
+            request.auth.orgId = orgId;
+            request.auth.orgRole = orgRole;
+            request.auth.authMethod = "supabase";
+
+            if (orgId && userId) {
+              await autoProvisionClerkOrg(app, orgId, userId, orgRole, email);
+            }
+            return;
+          }
         } catch {
           // Token invalid — fall through
         }

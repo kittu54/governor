@@ -1,8 +1,10 @@
 #!/bin/sh
 set -e
 
+cd /app/apps/api
+
 echo "Running Prisma migrations..."
-pnpm dlx prisma migrate deploy
+npx prisma migrate deploy
 
 echo "Starting Governor API..."
-node dist/server.js
+exec node /app/apps/api/dist/server.js

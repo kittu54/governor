@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import {
   ShieldCheck, Key, Zap, CheckCircle, Circle, Copy, Eye, EyeOff,
   Rocket, ArrowRight, Terminal, Code, BookOpen, ExternalLink, Loader2,
@@ -45,9 +45,8 @@ export function QuickstartClient({ orgId, hasApiKey, firewallInstalled, agentCou
     if (!keyName.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/api-keys`, {
+      const res = await apiFetch(`/v1/api-keys`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ org_id: orgId, name: keyName }),
       });
       if (res.ok) {
@@ -70,9 +69,8 @@ export function QuickstartClient({ orgId, hasApiKey, firewallInstalled, agentCou
   async function installFirewall() {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/firewall/bootstrap`, {
+      const res = await apiFetch(`/v1/firewall/bootstrap`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ org_id: orgId }),
       });
       if (res.ok) {

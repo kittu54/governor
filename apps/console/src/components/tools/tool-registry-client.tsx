@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Shield, Plus, Search, AlertTriangle } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface Tool {
   id: string;
@@ -87,14 +87,10 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
   async function handleClassify() {
     if (!form.tool_name || !form.tool_action) return;
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/v1/tools/classify-risk`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tool_name: form.tool_name, tool_action: form.tool_action }),
-        }
-      );
+      const res = await apiFetch(`/v1/tools/classify-risk`, {
+        method: "POST",
+        body: JSON.stringify({ tool_name: form.tool_name, tool_action: form.tool_action }),
+      });
       if (res.ok) {
         const data = await res.json();
         setClassifyResult(data);
@@ -111,9 +107,8 @@ export function ToolRegistryClient({ tools: initialTools, riskClasses, orgId }: 
     if (!form.tool_name || !form.tool_action) return;
     startTransition(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/v1/tools`, {
+        const res = await apiFetch(`/v1/tools`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             org_id: orgId,
             tool_name: form.tool_name,

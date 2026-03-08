@@ -573,7 +573,7 @@ export function protectAgent(
 ) {
   const org_id = options?.org_id ?? process.env.GOVERNOR_ORG_ID;
   const agent_id = options?.agent_id ?? process.env.GOVERNOR_AGENT_ID;
-  const api_base_url = options?.api_base_url ?? process.env.GOVERNOR_API_BASE_URL ?? "http://localhost:4000";
+  const api_base_url = options?.api_base_url ?? process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? "http://localhost:4000";
 
   if (!org_id || !agent_id) {
     throw new Error(
@@ -667,7 +667,7 @@ export function protectAgent(
 }
 
 export function createGovernorFromEnv() {
-  const api_base_url = process.env.GOVERNOR_API_BASE_URL ?? "http://localhost:4000";
+  const api_base_url = process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? "http://localhost:4000";
   const org_id = process.env.GOVERNOR_ORG_ID;
   const agent_id = process.env.GOVERNOR_AGENT_ID;
 

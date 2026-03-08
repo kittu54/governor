@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Bell, Plus, Trash2, TestTube, Webhook, MessageSquare, Loader2 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface AlertConfig {
   id: string;
@@ -51,9 +51,8 @@ export function AlertsClient({ initialConfigs, orgId }: AlertsClientProps) {
     if (!formUrl) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/alerts/webhook`, {
+      const res = await apiFetch(`/v1/alerts/webhook`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ org_id: orgId, name: formName || "Webhook Alert", url: formUrl, alert_types: ["*"] }),
       });
       if (res.ok) {
@@ -77,9 +76,8 @@ export function AlertsClient({ initialConfigs, orgId }: AlertsClientProps) {
     if (!formUrl) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/alerts/slack`, {
+      const res = await apiFetch(`/v1/alerts/slack`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ org_id: orgId, name: formName || "Slack Alert", webhook_url: formUrl, alert_types: ["*"] }),
       });
       if (res.ok) {
@@ -101,7 +99,7 @@ export function AlertsClient({ initialConfigs, orgId }: AlertsClientProps) {
 
   async function deleteConfig(id: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/alerts/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/v1/alerts/${id}`, { method: "DELETE" });
       if (res.ok) {
         setConfigs((prev) => prev.filter((c) => c.id !== id));
         showToast("Alert deleted");
@@ -113,9 +111,8 @@ export function AlertsClient({ initialConfigs, orgId }: AlertsClientProps) {
 
   async function testAlert() {
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/alerts/test`, {
+      const res = await apiFetch(`/v1/alerts/test`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ org_id: orgId }),
       });
       if (res.ok) {
@@ -129,7 +126,7 @@ export function AlertsClient({ initialConfigs, orgId }: AlertsClientProps) {
 
   async function reload() {
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/alerts`);
+      const res = await apiFetch(`/v1/alerts`);
       if (res.ok) {
         const data = await res.json();
         setConfigs(data.configs ?? []);

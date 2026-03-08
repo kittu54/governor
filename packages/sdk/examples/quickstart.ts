@@ -12,7 +12,7 @@
 
 import { createGovernor } from "@governor/sdk";
 
-const API_BASE = process.env.GOVERNOR_API_BASE_URL ?? "http://localhost:4000";
+const API_BASE = process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? "https://api.governor.run";
 const API_KEY = process.env.GOVERNOR_API_KEY;
 const ORG_ID = process.env.GOVERNOR_ORG_ID ?? "org_demo_1";
 const AGENT_ID = process.env.GOVERNOR_AGENT_ID ?? "quickstart_agent";
@@ -106,7 +106,8 @@ console.log("   ✅ Telemetry run sent successfully\n");
 // ─── Done ─────────────────────────────────────────────────────────
 
 console.log("🎉 Quickstart complete!\n");
+const CONSOLE_URL = process.env.GOVERNOR_CONSOLE_URL ?? "https://agentgovernor.vercel.app";
 console.log("   Open the Governor console to see your data:");
-console.log("   → Timeline:  http://localhost:3000/timeline");
-console.log("   → Runs:      http://localhost:3000/runs");
-console.log("   → Overview:  http://localhost:3000/overview\n");
+console.log(`   → Actions:   ${CONSOLE_URL}/actions`);
+console.log(`   → Runs:      ${CONSOLE_URL}/runs`);
+console.log(`   → Overview:  ${CONSOLE_URL}/overview\n`);

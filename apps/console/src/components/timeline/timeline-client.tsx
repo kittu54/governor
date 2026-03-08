@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, X } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 interface AuditEvent {
   id: string;
@@ -60,7 +60,7 @@ export function TimelineClient({ orgId, initialEvents }: TimelineClientProps) {
 
   useEffect(() => {
     async function refresh() {
-      const res = await fetch(`${API_BASE_URL}/v1/audit/events?${query}`, { cache: "no-store" });
+      const res = await apiFetch(`/v1/audit/events?${query}`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       setEvents(data.events ?? []);
@@ -76,7 +76,7 @@ export function TimelineClient({ orgId, initialEvents }: TimelineClientProps) {
       try {
         const parsed = JSON.parse(event.data);
         if (parsed.type === "audit.created" || parsed.type === "audit.updated") {
-          fetch(`${API_BASE_URL}/v1/audit/events?${query}`, { cache: "no-store" })
+          apiFetch(`/v1/audit/events?${query}`, { cache: "no-store" })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
               if (data?.events) setEvents(data.events);

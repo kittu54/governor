@@ -4,7 +4,9 @@ import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { isClerkEnabled } from "@/lib/clerk";
+import Link from "next/link";
+import type { Route } from "next";
+import { authMode } from "@/lib/clerk";
 import { Building2, ArrowRight } from "lucide-react";
 
 const ClerkCreateOrg = dynamic(() =>
@@ -13,7 +15,7 @@ const ClerkCreateOrg = dynamic(() =>
 );
 
 export function SelectOrgPrompt() {
-  if (!isClerkEnabled) {
+  if (authMode === "local") {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Card className="max-w-lg w-full">
@@ -32,6 +34,31 @@ export function SelectOrgPrompt() {
             <p className="text-xs text-muted-foreground text-center">
               Then restart the console to begin using Governor.
             </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (authMode === "supabase") {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Card className="max-w-lg w-full">
+          <CardHeader className="text-center">
+            <Building2 className="mx-auto h-12 w-12 text-primary mb-4" />
+            <CardTitle className="text-xl">Welcome to Governor</CardTitle>
+            <CardDescription>
+              Your organization has been automatically created.
+              Generate an API key in Settings to start governing your AI agents.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-4">
+            <Link
+              href={"/settings" as Route}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
+            >
+              Go to Settings <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
           </CardContent>
         </Card>
       </div>

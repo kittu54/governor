@@ -14,7 +14,7 @@ import {
   ArrowLeft, Bot, Pencil, Save, X, Loader2,
   ShieldCheck, AlertTriangle, Wallet, Gauge, Layers, Clock
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface PolicyRule {
   id: string;
@@ -104,9 +104,8 @@ export function AgentDetailClient({ orgId, data }: AgentDetailClientProps) {
           return { tool_name: tool_name.trim(), tool_action: tool_action.trim() };
         });
 
-      const response = await fetch(`${API_BASE_URL}/v1/agents/${agent.id}`, {
+      const response = await apiFetch(`/v1/agents/${agent.id}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
           description: form.description.trim() || null,

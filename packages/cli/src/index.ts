@@ -6,6 +6,7 @@ import { resolve, join } from "node:path";
 const VERSION = "0.1.0";
 const CONFIG_FILE = ".governor.json";
 const DEFAULT_API = "http://localhost:4000";
+const HOSTED_API = "https://api.governor.run";
 
 interface GovernorConfig {
   api_base_url: string;
@@ -30,7 +31,7 @@ function saveConfig(config: GovernorConfig): void {
 }
 
 function getApiUrl(): string {
-  return loadConfig()?.api_base_url ?? process.env.GOVERNOR_API_BASE_URL ?? DEFAULT_API;
+  return loadConfig()?.api_base_url ?? process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? DEFAULT_API;
 }
 
 function getOrgId(): string {
@@ -76,7 +77,7 @@ async function cmdInit(): Promise<void> {
   const agentId = process.argv[4] ?? "my-agent";
 
   const config: GovernorConfig = {
-    api_base_url: process.env.GOVERNOR_API_BASE_URL ?? DEFAULT_API,
+    api_base_url: process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? HOSTED_API,
     org_id: orgId,
     agent_id: agentId,
     environment: "DEV",
@@ -102,7 +103,7 @@ async function cmdInit(): Promise<void> {
 
 async function cmdLogin(): Promise<void> {
   const apiKey = process.argv[3];
-  const apiUrl = process.argv[4] ?? DEFAULT_API;
+  const apiUrl = process.argv[4] ?? process.env.GOVERNOR_API_BASE_URL ?? process.env.GOVERNOR_API_URL ?? HOSTED_API;
 
   if (!apiKey) {
     console.error("Usage: governor login <api_key> [api_url]");
@@ -297,6 +298,10 @@ async function cmdStart(): Promise<void> {
   console.log("");
   console.log("  API:     http://localhost:4000");
   console.log("  Console: http://localhost:3000");
+  console.log("");
+  console.log("  Hosted (production):");
+  console.log("  Console: https://agentgovernor.vercel.app");
+  console.log("  API:     https://api.governor.run");
 }
 
 function printHelp(): void {
@@ -317,7 +322,7 @@ Commands:
   start                        Show local dev instructions
 
 Environment Variables:
-  GOVERNOR_API_BASE_URL   API endpoint (default: http://localhost:4000)
+  GOVERNOR_API_URL        API endpoint (hosted: https://api.governor.run)
   GOVERNOR_ORG_ID         Organization ID
   GOVERNOR_AGENT_ID       Agent ID
   GOVERNOR_API_KEY        API key

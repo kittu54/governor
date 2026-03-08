@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, Plus, X, Loader2, Search, Filter, ShieldCheck, Clock, Layers } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -107,9 +107,8 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
         allowed_tools: allowedTools.length > 0 ? allowedTools : undefined
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/agents`, {
+      const response = await apiFetch(`/v1/agents`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload)
       });
 

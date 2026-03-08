@@ -11,7 +11,7 @@ import {
   Key, Plus, Trash2, Copy, Loader2, ShieldCheck,
   CheckCircle, Eye, EyeOff, Plug
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface ApiKey {
   id: string;
@@ -107,9 +107,8 @@ export function IntegrationsClient({ orgId, apiBaseUrl, initialKeys, frameworks 
     }
 
     startTransition(async () => {
-      const response = await fetch(`${API_BASE_URL}/v1/api-keys`, {
+      const response = await apiFetch(`/v1/api-keys`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           org_id: orgId,
           name: newKeyName.trim(),
@@ -142,7 +141,7 @@ export function IntegrationsClient({ orgId, apiBaseUrl, initialKeys, frameworks 
 
   function handleRevoke(keyId: string) {
     startTransition(async () => {
-      const response = await fetch(`${API_BASE_URL}/v1/api-keys/${keyId}`, { method: "DELETE" });
+      const response = await apiFetch(`/v1/api-keys/${keyId}`, { method: "DELETE" });
       if (response.ok) {
         setKeys(prev => prev.map(k => k.id === keyId ? { ...k, revokedAt: new Date().toISOString() } : k));
         showToast("Key revoked");
