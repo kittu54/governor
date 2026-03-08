@@ -1,15 +1,15 @@
 "use client";
 
-import { lazy, Suspense } from "react";
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { isClerkEnabled } from "@/lib/clerk";
 import { Building2, ArrowRight } from "lucide-react";
 
-const ClerkCreateOrg = lazy(() =>
-  import("@clerk/nextjs").then((mod) => ({
-    default: mod.CreateOrganization,
-  }))
+const ClerkCreateOrg = dynamic(() =>
+  import("@clerk/nextjs").then((mod) => mod.CreateOrganization),
+  { ssr: false }
 );
 
 export function SelectOrgPrompt() {
