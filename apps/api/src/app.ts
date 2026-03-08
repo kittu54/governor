@@ -59,9 +59,9 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
       });
     }
 
-    const statusCode = error.statusCode ?? 500;
+    const statusCode = (error as any).statusCode ?? 500;
     reply.status(statusCode).send({
-      error: error.message ?? "Internal Server Error"
+      error: (error as Error).message ?? "Internal Server Error"
     });
   });
 

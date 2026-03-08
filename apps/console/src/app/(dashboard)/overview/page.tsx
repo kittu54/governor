@@ -8,7 +8,7 @@ import { apiGet } from "@/lib/api";
 import { resolveOrgId } from "@/lib/org";
 import {
   Activity, ShieldAlert, Clock, DollarSign, TrendingUp, TrendingDown,
-  ArrowRight, Bot, Layers, ShieldCheck
+  ArrowRight, Bot, Layers, ShieldCheck, AlertTriangle, Shield,
 } from "lucide-react";
 
 interface OverviewResponse {
@@ -29,12 +29,32 @@ interface AgentsResponse {
     orgId: string;
     status?: string;
     description?: string | null;
+    framework?: string;
+    environment?: string;
     stats?: {
       total_runs: number;
       total_audit_events: number;
       pending_approvals: number;
     };
   }>;
+}
+
+interface RiskClassMetric {
+  risk_class: string;
+  total: number;
+  denied: number;
+  allowed: number;
+  approval: number;
+  cost: number;
+  block_rate: number;
+}
+
+interface CostsResponse {
+  summary: {
+    total_governed_cost_usd: number;
+    total_blocked_cost_usd: number;
+    total_run_cost_usd: number;
+  };
 }
 
 const fallback: OverviewResponse = {
@@ -47,11 +67,26 @@ const fallback: OverviewResponse = {
   ]
 };
 
+const RISK_SEVERITY: Record<string, { label: string; color: string; bgColor: string }> = {
+  MONEY_MOVEMENT:         { label: "Money Movement",         color: "text-red-400",    bgColor: "bg-red-500/15" },
+  CODE_EXECUTION:         { label: "Code Execution",         color: "text-red-400",    bgColor: "bg-red-500/15" },
+  ADMIN_ACTION:           { label: "Admin Action",           color: "text-red-400",    bgColor: "bg-red-500/15" },
+  CREDENTIAL_USE:         { label: "Credential Use",         color: "text-red-400",    bgColor: "bg-red-500/15" },
+  EXTERNAL_COMMUNICATION: { label: "External Comms",         color: "text-amber-400",  bgColor: "bg-amber-500/15" },
+  DATA_EXPORT:            { label: "Data Export",            color: "text-amber-400",  bgColor: "bg-amber-500/15" },
+  DATA_WRITE:             { label: "Data Write",             color: "text-amber-400",  bgColor: "bg-amber-500/15" },
+  PII_ACCESS:             { label: "PII Access",             color: "text-amber-400",  bgColor: "bg-amber-500/15" },
+  FILE_MUTATION:           { label: "File Mutation",          color: "text-amber-400",  bgColor: "bg-amber-500/15" },
+  LOW_RISK:               { label: "Low Risk",               color: "text-emerald-400", bgColor: "bg-emerald-500/15" },
+};
+
 export default async function OverviewPage() {
   const orgId = await resolveOrgId();
-  const [overview, agents] = await Promise.all([
+  const [overview, agents, riskMetrics, costs] = await Promise.all([
     apiGet<OverviewResponse>(`/v1/metrics/overview?org_id=${orgId}`).catch(() => fallback),
-    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] }))
+    apiGet<AgentsResponse>(`/v1/agents?org_id=${encodeURIComponent(orgId)}`).catch(() => ({ agents: [] })),
+    apiGet<{ risk_classes: RiskClassMetric[] }>(`/v1/metrics/risk-classes?org_id=${orgId}`).catch(() => ({ risk_classes: [] })),
+    apiGet<CostsResponse>(`/v1/metrics/costs?org_id=${orgId}`).catch(() => ({ summary: { total_governed_cost_usd: 0, total_blocked_cost_usd: 0, total_run_cost_usd: 0 } })),
   ]);
 
   const totalDecisions = overview.decision_breakdown.reduce((sum, d) => sum + d.value, 0);
@@ -98,6 +133,8 @@ export default async function OverviewPage() {
       color: "text-primary"
     }
   ];
+
+  const totalRiskEvals = riskMetrics.risk_classes.reduce((s, r) => s + r.total, 0);
 
   return (
     <div className="space-y-6">
@@ -151,9 +188,11 @@ export default async function OverviewPage() {
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Decisions</p>
-            <p className="mt-1 text-2xl font-bold text-foreground">{totalDecisions.toLocaleString()}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Across all policy evaluations</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Governed Cost</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">${costs.summary.total_governed_cost_usd.toFixed(2)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              ${costs.summary.total_blocked_cost_usd.toFixed(2)} blocked
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -172,6 +211,63 @@ export default async function OverviewPage() {
           </CardContent>
         </Card>
       </section>
+
+      {/* Risk Class Distribution */}
+      {riskMetrics.risk_classes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" /> Risk Class Distribution
+                </CardTitle>
+                <CardDescription>{totalRiskEvals} total evaluations across {riskMetrics.risk_classes.length} risk classes</CardDescription>
+              </div>
+              <Link href={"/tools" as Route} className="flex items-center gap-1 text-sm text-primary hover:underline">
+                Tool Registry <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {riskMetrics.risk_classes.map(rc => {
+                const meta = RISK_SEVERITY[rc.risk_class] ?? { label: rc.risk_class, color: "text-foreground", bgColor: "bg-muted" };
+                return (
+                  <div key={rc.risk_class} className="rounded-lg border border-border bg-muted/20 p-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`rounded p-1.5 ${meta.bgColor}`}>
+                        <AlertTriangle className={`h-3.5 w-3.5 ${meta.color}`} />
+                      </div>
+                      <span className="text-sm font-medium">{meta.label}</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+                      <div>
+                        <p className="font-bold text-foreground">{rc.total}</p>
+                        <p className="text-muted-foreground">Total</p>
+                      </div>
+                      <div>
+                        <p className="font-bold text-red-400">{rc.denied}</p>
+                        <p className="text-muted-foreground">Denied</p>
+                      </div>
+                      <div>
+                        <p className="font-bold text-emerald-400">{rc.allowed}</p>
+                        <p className="text-muted-foreground">Allowed</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Block rate</span>
+                      <span className={rc.block_rate > 50 ? "text-red-400" : "text-emerald-400"}>{rc.block_rate.toFixed(0)}%</span>
+                    </div>
+                    <div className="mt-1 h-1 w-full rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-red-500/60" style={{ width: `${Math.min(rc.block_rate, 100)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts */}
       <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
@@ -246,7 +342,10 @@ export default async function OverviewPage() {
                         <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">{agent.name}</p>
                         <Badge variant={agent.status === "ACTIVE" ? "success" : "secondary"} className="text-[9px]">{agent.status ?? "ACTIVE"}</Badge>
                       </div>
-                      <p className="mt-0.5 font-mono text-xs text-muted-foreground">{agent.id}</p>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        {agent.framework && <Badge variant="outline" className="text-[9px]">{agent.framework}</Badge>}
+                        {agent.environment && <Badge variant={agent.environment === "PROD" ? "destructive" : "secondary"} className="text-[9px]">{agent.environment}</Badge>}
+                      </div>
                       {agent.description && (
                         <p className="mt-1 max-w-full truncate text-xs text-muted-foreground">{agent.description}</p>
                       )}

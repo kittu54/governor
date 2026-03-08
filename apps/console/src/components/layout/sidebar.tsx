@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Activity, UserRoundCog, Building2, Bot, Scale, FileSearch, Menu, X, User, Settings, Plug } from "lucide-react";
+import { ShieldCheck, Activity, UserRoundCog, Building2, Bot, Scale, FileSearch, Menu, X, User, Settings, Plug, Shield, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -15,6 +15,8 @@ const navItems = [
   { href: "/runs", label: "Run Explorer", icon: FileSearch },
   { href: "/tenants", label: "Tenants", icon: Building2 },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/tools", label: "Tool Registry", icon: Shield },
+  { href: "/audit", label: "Audit Explorer", icon: ScrollText },
   { href: "/integrations", label: "Integrations", icon: Plug }
 ];
 

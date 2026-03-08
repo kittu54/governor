@@ -333,4 +333,128 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
 
     return { frameworks };
   });
+
+  // ─── Risk Class Metrics ────────────────────────────────────
+  app.get("/risk-classes", async (request) => {
+    const query = request.query as { org_id?: string; days?: string };
+    const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const evaluations = await app.prisma.evaluation.findMany({
+      where: { orgId: query.org_id, createdAt: { gte: since } },
+      select: { riskClass: true, decision: true, costEstimateUsd: true },
+    });
+
+    const map = new Map<string, { total: number; denied: number; allowed: number; approval: number; cost: number }>();
+
+    for (const ev of evaluations) {
+      const rc = ev.riskClass ?? "LOW_RISK";
+      const entry = map.get(rc) ?? { total: 0, denied: 0, allowed: 0, approval: 0, cost: 0 };
+      entry.total += 1;
+      entry.cost += ev.costEstimateUsd ?? 0;
+      if (ev.decision === "ALLOW") entry.allowed += 1;
+      else if (ev.decision === "DENY") entry.denied += 1;
+      else entry.approval += 1;
+      map.set(rc, entry);
+    }
+
+    return {
+      risk_classes: Array.from(map.entries())
+        .map(([risk_class, stats]) => ({
+          risk_class,
+          ...stats,
+          cost: Number(stats.cost.toFixed(2)),
+          block_rate: stats.total > 0 ? Number(((stats.denied / stats.total) * 100).toFixed(1)) : 0,
+        }))
+        .sort((a, b) => b.total - a.total),
+    };
+  });
+
+  // ─── Approval Metrics ──────────────────────────────────────
+  app.get("/approvals", async (request) => {
+    const query = request.query as { org_id?: string; days?: string };
+    const days = Math.min(Math.max(Number(query.days ?? 7), 1), 60);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const approvals = await app.prisma.approvalRequest.findMany({
+      where: { orgId: query.org_id, requestedAt: { gte: since } },
+      select: { status: true, toolName: true, riskClass: true, costEstimateUsd: true, requestedAt: true, decidedAt: true },
+    });
+
+    const statusCounts = { PENDING: 0, APPROVED: 0, DENIED: 0, EXPIRED: 0, CANCELED: 0 };
+    let totalResolutionMs = 0;
+    let resolvedCount = 0;
+    let totalCost = 0;
+
+    for (const a of approvals) {
+      statusCounts[a.status as keyof typeof statusCounts] = (statusCounts[a.status as keyof typeof statusCounts] ?? 0) + 1;
+      totalCost += a.costEstimateUsd;
+      if (a.decidedAt) {
+        totalResolutionMs += a.decidedAt.getTime() - a.requestedAt.getTime();
+        resolvedCount += 1;
+      }
+    }
+
+    return {
+      total: approvals.length,
+      status_breakdown: statusCounts,
+      avg_resolution_seconds: resolvedCount > 0 ? Math.round(totalResolutionMs / resolvedCount / 1000) : null,
+      total_cost_usd: Number(totalCost.toFixed(2)),
+    };
+  });
+
+  // ─── Cost Metrics ──────────────────────────────────────────
+  app.get("/costs", async (request) => {
+    const query = request.query as { org_id?: string; days?: string };
+    const days = Math.min(Math.max(Number(query.days ?? 30), 1), 90);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [evaluations, runs] = await Promise.all([
+      app.prisma.evaluation.findMany({
+        where: { orgId: query.org_id, createdAt: { gte: since } },
+        select: { costEstimateUsd: true, decision: true, createdAt: true, agentId: true },
+      }),
+      app.prisma.agentRun.findMany({
+        where: { orgId: query.org_id, startedAt: { gte: since } },
+        select: { totalCostUsd: true, startedAt: true },
+      }),
+    ]);
+
+    const dailyCosts = new Map<string, { governed_cost: number; blocked_cost: number; run_cost: number }>();
+
+    for (const ev of evaluations) {
+      const day = formatDay(ev.createdAt);
+      const entry = dailyCosts.get(day) ?? { governed_cost: 0, blocked_cost: 0, run_cost: 0 };
+      entry.governed_cost += ev.costEstimateUsd ?? 0;
+      if (ev.decision === "DENY") entry.blocked_cost += ev.costEstimateUsd ?? 0;
+      dailyCosts.set(day, entry);
+    }
+
+    for (const run of runs) {
+      const day = formatDay(run.startedAt);
+      const entry = dailyCosts.get(day) ?? { governed_cost: 0, blocked_cost: 0, run_cost: 0 };
+      entry.run_cost += run.totalCostUsd;
+      dailyCosts.set(day, entry);
+    }
+
+    const totalGoverned = evaluations.reduce((s, e) => s + (e.costEstimateUsd ?? 0), 0);
+    const totalBlocked = evaluations.filter((e) => e.decision === "DENY").reduce((s, e) => s + (e.costEstimateUsd ?? 0), 0);
+    const totalRunCost = runs.reduce((s, r) => s + r.totalCostUsd, 0);
+
+    return {
+      summary: {
+        total_governed_cost_usd: Number(totalGoverned.toFixed(2)),
+        total_blocked_cost_usd: Number(totalBlocked.toFixed(2)),
+        total_run_cost_usd: Number(totalRunCost.toFixed(4)),
+      },
+      daily: Array.from(dailyCosts.entries())
+        .map(([date, costs]) => ({
+          date,
+          governed_cost: Number(costs.governed_cost.toFixed(2)),
+          blocked_cost: Number(costs.blocked_cost.toFixed(2)),
+          run_cost: Number(costs.run_cost.toFixed(4)),
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    };
+  });
 };

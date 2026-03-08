@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 
 export type GovernorEvent = {
-  type: "audit.created" | "audit.updated" | "approval.updated" | "run.updated" | "event.ingested";
+  type: "audit.created" | "audit.updated" | "approval.updated" | "run.updated" | "event.ingested" | "policy.published" | "policy.updated";
   org_id: string;
   payload: Record<string, unknown>;
 };

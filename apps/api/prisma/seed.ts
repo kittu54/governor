@@ -71,12 +71,19 @@ function random<T>(values: readonly T[]): T {
 async function main() {
   await prisma.agentEvent.deleteMany();
   await prisma.agentRun.deleteMany();
+  await prisma.approvalAction.deleteMany();
   await prisma.approvalRequest.deleteMany();
+  await prisma.evaluation.deleteMany();
   await prisma.auditEvent.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.rateLimitPolicy.deleteMany();
   await prisma.budgetLimit.deleteMany();
   await prisma.approvalThreshold.deleteMany();
   await prisma.policyRule.deleteMany();
+  await prisma.approvalPolicy.deleteMany();
+  await prisma.tool.deleteMany();
+  await prisma.policyVersion.deleteMany();
+  await prisma.policy.deleteMany();
   await prisma.agent.deleteMany();
   await prisma.organization.deleteMany();
 
@@ -466,14 +473,144 @@ async function main() {
   }
 
   for (let i = 0; i < runRecords.length; i += 200) {
-    await prisma.agentRun.createMany({ data: runRecords.slice(i, i + 200) });
+    await prisma.agentRun.createMany({ data: runRecords.slice(i, i + 200) as any });
   }
 
   for (let i = 0; i < eventRecords.length; i += 500) {
-    await prisma.agentEvent.createMany({ data: eventRecords.slice(i, i + 500) });
+    await prisma.agentEvent.createMany({ data: eventRecords.slice(i, i + 500) as any });
   }
 
-  console.log("Seed completed with demo tenants, agents, audits, approvals, runs, and agent events");
+  // ─── Tool Registry ──────────────────────────────────────────
+  const toolRegistry = [
+    { orgId: "org_demo_1", toolName: "stripe", toolAction: "refund", displayName: "Stripe Refund", description: "Process customer refunds via Stripe API", riskClass: "MONEY_MOVEMENT" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "stripe", toolAction: "charge", displayName: "Stripe Charge", description: "Create payment charges", riskClass: "MONEY_MOVEMENT" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "gmail", toolAction: "send", displayName: "Send Email", description: "Send outbound email via Gmail API", riskClass: "EXTERNAL_COMMUNICATION" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "zendesk", toolAction: "close", displayName: "Close Ticket", description: "Close a Zendesk support ticket", riskClass: "DATA_WRITE" as const, isSensitive: false },
+    { orgId: "org_demo_1", toolName: "zendesk", toolAction: "delete", displayName: "Delete Ticket", description: "Permanently delete a support ticket", riskClass: "DATA_WRITE" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "postgres", toolAction: "update", displayName: "Database Update", description: "Update records in PostgreSQL", riskClass: "DATA_WRITE" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "s3", toolAction: "export", displayName: "S3 Export", description: "Export data to S3 bucket", riskClass: "DATA_EXPORT" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "shell", toolAction: "exec", displayName: "Shell Execute", description: "Execute shell commands", riskClass: "CODE_EXECUTION" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "fs", toolAction: "delete", displayName: "File Delete", description: "Delete files from filesystem", riskClass: "FILE_MUTATION" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "vault", toolAction: "read", displayName: "Vault Read", description: "Read secrets from Vault", riskClass: "CREDENTIAL_USE" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "customer", toolAction: "lookup", displayName: "Customer Lookup", description: "Look up customer PII", riskClass: "PII_ACCESS" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "iam", toolAction: "grant", displayName: "Grant IAM Role", description: "Grant IAM permissions", riskClass: "ADMIN_ACTION" as const, isSensitive: true },
+    { orgId: "org_demo_1", toolName: "slack", toolAction: "send", displayName: "Slack Message", description: "Send Slack channel message", riskClass: "EXTERNAL_COMMUNICATION" as const, isSensitive: false },
+    { orgId: "org_demo_1", toolName: "http", toolAction: "GET", displayName: "HTTP GET", description: "Read-only HTTP request", riskClass: "LOW_RISK" as const, isSensitive: false },
+  ];
+
+  for (const tool of toolRegistry) {
+    await prisma.tool.upsert({
+      where: { orgId_toolName_toolAction: { orgId: tool.orgId, toolName: tool.toolName, toolAction: tool.toolAction } },
+      create: tool,
+      update: tool,
+    });
+  }
+
+  // ─── Approval Policies ─────────────────────────────────────
+  await prisma.approvalPolicy.createMany({
+    data: [
+      { orgId: "org_demo_1", name: "Money Movement Approval", riskClass: "MONEY_MOVEMENT", requiresReason: true, autoExpireSeconds: 3600 },
+      { orgId: "org_demo_1", name: "Data Export Approval", riskClass: "DATA_EXPORT", thresholdUsd: 0, requiresReason: true, autoExpireSeconds: 7200 },
+      { orgId: "org_demo_1", name: "Admin Actions Approval", riskClass: "ADMIN_ACTION", requiresReason: true, autoExpireSeconds: 1800 },
+    ],
+    skipDuplicates: true,
+  });
+
+  // ─── V2 Policies (Policy Packs) ────────────────────────────
+  const policyPacks = [
+    {
+      name: "Customer Support Controls",
+      description: "Governance rules for customer-facing support agents: refund limits, email review, and PII access controls.",
+      enforcementMode: "PROD",
+      definition: {
+        rules: [
+          { name: "block-high-refunds", description: "Deny refunds over $500 without approval", effect: "DENY", priority: 10, subjects: [{ type: "tool", value: "stripe.refund" }], conditions: [{ field: "cost_estimate_usd", operator: "greater_than", value: 500 }], reason: "Refunds over $500 need manager approval" },
+          { name: "require-approval-external-email", description: "Require approval for sending external emails", effect: "DENY", priority: 20, subjects: [{ type: "tool", value: "gmail.send" }], reason: "External communications require human review" },
+          { name: "allow-ticket-ops", description: "Allow standard ticket operations", effect: "ALLOW", priority: 100, subjects: [{ type: "tool", value: "zendesk.close" }, { type: "tool", value: "zendesk.update" }] },
+          { name: "block-ticket-delete", description: "Prevent permanent ticket deletion", effect: "DENY", priority: 5, subjects: [{ type: "tool", value: "zendesk.delete" }], reason: "Permanent deletion is not allowed in production" },
+        ],
+      },
+    },
+    {
+      name: "Finance Operations",
+      description: "Strict controls for finance and payment processing agents: all money movement requires approval, spend caps enforced.",
+      enforcementMode: "PROD",
+      definition: {
+        rules: [
+          { name: "approve-all-charges", description: "All payment charges require approval", effect: "DENY", priority: 5, subjects: [{ type: "tool", value: "stripe.charge" }], reason: "All charges must be approved by a human operator" },
+          { name: "approve-refunds-over-100", description: "Refunds over $100 need approval", effect: "DENY", priority: 10, subjects: [{ type: "tool", value: "stripe.refund" }], conditions: [{ field: "cost_estimate_usd", operator: "greater_than", value: 100 }], reason: "Finance policy: refunds above $100 need approval" },
+          { name: "block-db-mutations", description: "Block direct database mutations", effect: "DENY", priority: 5, subjects: [{ type: "tool", value: "postgres.update" }, { type: "tool", value: "postgres.delete" }], reason: "Direct DB mutations are blocked in PROD" },
+          { name: "allow-read-only", description: "Allow all read operations", effect: "ALLOW", priority: 200, subjects: [{ type: "tool_action", value: "read" }, { type: "tool_action", value: "GET" }, { type: "tool_action", value: "list" }] },
+        ],
+      },
+    },
+    {
+      name: "Development Sandbox",
+      description: "Permissive policy for development and testing environments. Logs all actions but allows most operations.",
+      enforcementMode: "DEV",
+      definition: {
+        rules: [
+          { name: "block-prod-credentials", description: "Block access to production credentials even in dev", effect: "DENY", priority: 1, subjects: [{ type: "tool", value: "vault.read" }], conditions: [{ field: "metadata.env", operator: "equals", value: "production" }], reason: "Production credentials are never accessible in dev" },
+          { name: "allow-everything-else", description: "Allow all other operations for development", effect: "ALLOW", priority: 999, subjects: [{ type: "tool_action", value: "*" }] },
+        ],
+      },
+    },
+  ];
+
+  for (const pack of policyPacks) {
+    const policy = await prisma.policy.create({
+      data: {
+        orgId: "org_demo_1",
+        name: pack.name,
+        description: pack.description,
+        enforcementMode: pack.enforcementMode as any,
+        status: "DRAFT",
+      },
+    });
+
+    const checksum = Math.random().toString(36).slice(2, 18);
+
+    const version = await prisma.policyVersion.create({
+      data: {
+        policyId: policy.id,
+        versionNumber: 1,
+        definitionJson: pack.definition as any,
+        checksum,
+        changeSummary: "Initial version",
+        createdBy: "seed",
+      },
+    });
+
+    await prisma.policy.update({
+      where: { id: policy.id },
+      data: {
+        currentVersionId: version.id,
+        status: "PUBLISHED",
+      },
+    });
+
+    await prisma.policyVersion.update({
+      where: { id: version.id },
+      data: { isPublished: true },
+    });
+  }
+
+  // ─── Audit Log Entries (for seeded actions) ────────────────
+  await prisma.auditLog.createMany({
+    data: [
+      { orgId: "org_demo_1", actorType: "SYSTEM", eventType: "seed.completed", entityType: "Organization", entityId: "org_demo_1", summary: "Database seeded with demo data" },
+      { orgId: "org_demo_1", actorType: "USER", actorId: "admin", eventType: "policy.created", entityType: "Policy", summary: "Created Customer Support Controls policy" },
+      { orgId: "org_demo_1", actorType: "USER", actorId: "admin", eventType: "policy.created", entityType: "Policy", summary: "Created Finance Operations policy" },
+      { orgId: "org_demo_1", actorType: "USER", actorId: "admin", eventType: "tool.registered", entityType: "Tool", summary: "Registered 14 tools in the tool registry" },
+      { orgId: "org_demo_1", actorType: "SYSTEM", eventType: "policy_version.published", entityType: "PolicyVersion", summary: "Published v1 of Customer Support Controls" },
+      { orgId: "org_demo_1", actorType: "SYSTEM", eventType: "policy_version.published", entityType: "PolicyVersion", summary: "Published v1 of Finance Operations" },
+      { orgId: "org_demo_1", actorType: "SYSTEM", eventType: "agent.registered", entityType: "Agent", entityId: "agent_support_1", summary: "Registered Support Agent" },
+      { orgId: "org_demo_1", actorType: "SYSTEM", eventType: "agent.registered", entityType: "Agent", entityId: "agent_finance_1", summary: "Registered Finance Agent" },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log("Seed completed with demo tenants, agents, audits, approvals, runs, events, tools, policies, and policy packs");
 }
 
 main()

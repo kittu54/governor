@@ -45,8 +45,8 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           taskName: payload.run.task_name,
           promptHash: payload.run.prompt_hash,
           startedAt: payload.run.started_at ? new Date(payload.run.started_at) : new Date(),
-          tags: payload.run.tags,
-          metadata: payload.run.metadata,
+          tags: payload.run.tags as any,
+          metadata: (payload.run.metadata ?? undefined) as any,
           status: "RUNNING"
         },
         update: {
@@ -59,8 +59,8 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
           runtime: payload.run.runtime ?? undefined,
           taskName: payload.run.task_name ?? undefined,
           promptHash: payload.run.prompt_hash ?? undefined,
-          tags: payload.run.tags ?? undefined,
-          metadata: payload.run.metadata ?? undefined
+          tags: (payload.run.tags ?? undefined) as any,
+          metadata: (payload.run.metadata ?? undefined) as any
         }
       });
 
@@ -112,10 +112,10 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
             status: event.status,
             errorMessage: event.error_message,
             sequence: event.sequence,
-            inputPayload: event.input_payload,
-            outputPayload: event.output_payload,
-            parameters: event.parameters,
-            metadata: event.metadata
+            inputPayload: event.input_payload as any,
+            outputPayload: event.output_payload as any,
+            parameters: event.parameters as any,
+            metadata: event.metadata as any
           }))
         });
       }

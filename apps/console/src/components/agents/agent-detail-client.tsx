@@ -49,6 +49,8 @@ interface AgentDetailData {
     description?: string | null;
     status: "ACTIVE" | "INACTIVE" | "SUSPENDED";
     framework?: string | null;
+    environment?: string | null;
+    provider?: string | null;
     tags?: string[] | null;
     allowedTools?: Array<{ tool_name: string; tool_action: string }> | null;
     metadata?: Record<string, unknown> | null;
@@ -161,8 +163,18 @@ export function AgentDetailClient({ orgId, data }: AgentDetailClientProps) {
               {agent.framework && (
                 <Badge variant="outline" className="capitalize">{agent.framework}</Badge>
               )}
+              {agent.environment && (
+                <Badge variant={agent.environment === "PROD" ? "destructive" : agent.environment === "STAGING" ? "warning" : "secondary"}>
+                  {agent.environment}
+                </Badge>
+              )}
             </div>
-            <p className="font-mono text-sm text-muted-foreground">{agent.id}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-sm text-muted-foreground">{agent.id}</p>
+              {agent.provider && (
+                <span className="text-xs text-muted-foreground">· Provider: <span className="font-medium text-foreground">{agent.provider}</span></span>
+              )}
+            </div>
             {agent.description && <p className="mt-1 text-sm text-muted-foreground">{agent.description}</p>}
           </div>
         </div>

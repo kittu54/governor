@@ -10,10 +10,15 @@ import { runsRoutes } from "../modules/runs/routes";
 import { agentsRoutes } from "../modules/agents/routes";
 import { gatewayRoutes } from "../modules/gateway/routes";
 import { apiKeyRoutes } from "../modules/apikeys/routes";
+import { policiesRoutes } from "../modules/policies/routes";
+import { toolsRoutes } from "../modules/tools/routes";
+import { auditLogRoutes } from "../modules/auditlog/routes";
+import { webhooksRoutes } from "../modules/webhooks/routes";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(evaluateRoutes);
   await app.register(policyRoutes, { prefix: "/policies" });
+  await app.register(policiesRoutes, { prefix: "/policies/v2" });
   await app.register(auditRoutes, { prefix: "/audit" });
   await app.register(approvalsRoutes, { prefix: "/approvals" });
   await app.register(metricsRoutes, { prefix: "/metrics" });
@@ -23,4 +28,7 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(agentsRoutes, { prefix: "/agents" });
   await app.register(gatewayRoutes, { prefix: "/gateway" });
   await app.register(apiKeyRoutes, { prefix: "/api-keys" });
+  await app.register(toolsRoutes, { prefix: "/tools" });
+  await app.register(auditLogRoutes, { prefix: "/audit-log" });
+  await app.register(webhooksRoutes, { prefix: "/webhooks" });
 };

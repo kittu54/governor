@@ -19,6 +19,8 @@ interface Agent {
   description?: string | null;
   status: "ACTIVE" | "INACTIVE" | "SUSPENDED";
   framework?: string | null;
+  environment?: string | null;
+  provider?: string | null;
   tags?: string[] | null;
   allowedTools?: Array<{ tool_name: string; tool_action: string }> | null;
   createdAt: string;
@@ -50,6 +52,8 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
     name: "",
     description: "",
     framework: "",
+    environment: "DEV",
+    provider: "",
     tags: "",
     allowedTools: ""
   });
@@ -97,6 +101,8 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
         description: form.description.trim() || undefined,
         status: "ACTIVE" as const,
         framework: form.framework || undefined,
+        environment: form.environment || undefined,
+        provider: form.provider || undefined,
         tags: tags.length > 0 ? tags : undefined,
         allowed_tools: allowedTools.length > 0 ? allowedTools : undefined
       };
@@ -125,7 +131,7 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
         createdAt: agent.createdAt,
         stats: { total_runs: 0, total_audit_events: 0, pending_approvals: 0 }
       }, ...prev]);
-      setForm({ id: "", name: "", description: "", framework: "", tags: "", allowedTools: "" });
+      setForm({ id: "", name: "", description: "", framework: "", environment: "DEV", provider: "", tags: "", allowedTools: "" });
       setShowAddForm(false);
       showToast("Agent registered");
     });
@@ -289,6 +295,29 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
                     </optgroup>
                   </select>
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="agent-env">Environment</Label>
+                  <select
+                    id="agent-env"
+                    value={form.environment}
+                    onChange={(e) => setForm(f => ({ ...f, environment: e.target.value }))}
+                    className="h-10 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground"
+                  >
+                    <option value="DEV">DEV</option>
+                    <option value="STAGING">STAGING</option>
+                    <option value="PROD">PROD</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="agent-provider">Provider</Label>
+                  <Input
+                    id="agent-provider"
+                    placeholder="e.g. openai, anthropic, google"
+                    value={form.provider}
+                    onChange={(e) => setForm(f => ({ ...f, provider: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">LLM provider used by this agent.</p>
+                </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="agent-desc">Description</Label>
                   <Textarea
@@ -346,6 +375,7 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
               <TableRow>
                 <TableHead>Agent</TableHead>
                 <TableHead>Platform</TableHead>
+                <TableHead>Environment</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Tags</TableHead>
                 <TableHead>Runs</TableHead>
@@ -373,6 +403,15 @@ export function AgentsClient({ initialAgents, orgId }: AgentsClientProps) {
                     <TableCell>
                       {agent.framework ? (
                         <Badge variant="outline" className="capitalize text-[10px]">{agent.framework}</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {agent.environment ? (
+                        <Badge variant={agent.environment === "PROD" ? "destructive" : agent.environment === "STAGING" ? "warning" : "secondary"} className="text-[10px]">
+                          {agent.environment}
+                        </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

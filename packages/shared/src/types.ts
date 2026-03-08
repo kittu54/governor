@@ -1,6 +1,59 @@
-export type GovernorDecision = "ALLOW" | "DENY" | "REQUIRE_APPROVAL";
+import type { RiskClass } from "./risk";
 
+// ──────────────────────────────────────────────────────────────
+// Core Enums
+// ──────────────────────────────────────────────────────────────
+
+export type GovernorDecision = "ALLOW" | "DENY" | "REQUIRE_APPROVAL";
 export type PolicyEffect = "ALLOW" | "DENY";
+export type EnforcementMode = "DEV" | "STAGING" | "PROD";
+export type PolicyStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type ScopeType = "ORG" | "AGENT" | "TOOL" | "RISK_CLASS";
+export type BudgetPeriod = "DAILY" | "WEEKLY" | "MONTHLY";
+export type ApprovalActionKind = "APPROVE" | "DENY" | "ESCALATE" | "COMMENT";
+
+// ──────────────────────────────────────────────────────────────
+// Conditions DSL
+// ──────────────────────────────────────────────────────────────
+
+export type ConditionOperator =
+  | "equals"
+  | "not_equals"
+  | "in"
+  | "not_in"
+  | "greater_than"
+  | "less_than"
+  | "greater_than_or_equal"
+  | "less_than_or_equal"
+  | "contains"
+  | "not_contains"
+  | "regex"
+  | "exists"
+  | "not_exists";
+
+export interface LeafCondition {
+  field: string;
+  operator: ConditionOperator;
+  value: unknown;
+}
+
+export interface AndCondition {
+  and: Condition[];
+}
+
+export interface OrCondition {
+  or: Condition[];
+}
+
+export interface NotCondition {
+  not: Condition;
+}
+
+export type Condition = LeafCondition | AndCondition | OrCondition | NotCondition;
+
+// ──────────────────────────────────────────────────────────────
+// Legacy Policy Primitives (backward compat)
+// ──────────────────────────────────────────────────────────────
 
 export interface PolicyRule {
   id: string;
@@ -11,6 +64,8 @@ export interface PolicyRule {
   effect: PolicyEffect;
   priority: number;
   reason?: string;
+  risk_class?: RiskClass | null;
+  conditions?: Condition | null;
 }
 
 export interface ApprovalThreshold {
@@ -20,6 +75,7 @@ export interface ApprovalThreshold {
   tool_name: string;
   tool_action: string;
   amount_usd: number;
+  risk_class?: RiskClass | null;
 }
 
 export interface BudgetLimit {
@@ -36,17 +92,80 @@ export interface RateLimitPolicy {
   calls_per_minute: number;
 }
 
+// ──────────────────────────────────────────────────────────────
+// V2 Policy Definitions (versioned)
+// ──────────────────────────────────────────────────────────────
+
+export interface PolicyRuleDefinition {
+  id?: string;
+  priority: number;
+  effect: PolicyEffect | "REQUIRE_APPROVAL";
+  subject_type: "ORG" | "AGENT" | "TOOL" | "RISK_CLASS" | "USER" | "ENVIRONMENT";
+  subject_value?: string;
+  conditions?: Condition;
+  reason_template: string;
+}
+
+export interface PolicyDefinition {
+  rules: PolicyRuleDefinition[];
+  budgets?: BudgetDefinition[];
+  rate_limits?: RateLimitDefinition[];
+  approval_requirements?: ApprovalRequirementDefinition[];
+}
+
+export interface BudgetDefinition {
+  scope_type: ScopeType;
+  scope_id?: string;
+  period: BudgetPeriod;
+  limit_usd: number;
+  warn_at_usd?: number;
+  hard_stop: boolean;
+}
+
+export interface RateLimitDefinition {
+  scope_type: ScopeType;
+  scope_id?: string;
+  window_seconds: number;
+  max_calls: number;
+}
+
+export interface ApprovalRequirementDefinition {
+  risk_class?: RiskClass;
+  tool_name?: string;
+  tool_action?: string;
+  threshold_usd?: number;
+  requires_reason: boolean;
+  auto_expire_seconds: number;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Decision Trace
+// ──────────────────────────────────────────────────────────────
+
+export type TraceCode =
+  | "MODE_CHECK"
+  | "SENSITIVE_CHECK"
+  | "RISK_CLASS_CHECK"
+  | "BUDGET_CHECK"
+  | "BUDGET_WARN"
+  | "RATE_LIMIT_CHECK"
+  | "RULE_MATCH"
+  | "CONDITION_EVAL"
+  | "THRESHOLD_CHECK"
+  | "APPROVAL_POLICY_CHECK"
+  | "DEFAULT_ALLOW"
+  | "DEFAULT_DENY"
+  | "DENY"
+  | "REQUIRE_APPROVAL"
+  | "ALLOW";
+
 export interface DecisionTraceItem {
-  code:
-    | "RULE_MATCH"
-    | "BUDGET_CHECK"
-    | "RATE_LIMIT_CHECK"
-    | "THRESHOLD_CHECK"
-    | "DEFAULT_ALLOW"
-    | "DENY"
-    | "REQUIRE_APPROVAL"
-    | "ALLOW";
+  code: TraceCode | string;
+  check_type?: string;
   message: string;
+  timestamp?: string;
+  policy_version_id?: string;
+  matched_rule_id?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -56,6 +175,7 @@ export interface BudgetSnapshot {
   agent_spend_today_usd: number;
   agent_limit_usd?: number;
   cost_estimate_usd: number;
+  warning?: string;
 }
 
 export interface RateLimitSnapshot {
@@ -64,15 +184,23 @@ export interface RateLimitSnapshot {
   window_seconds: number;
 }
 
+// ──────────────────────────────────────────────────────────────
+// Evaluation Context & Results
+// ──────────────────────────────────────────────────────────────
+
 export interface PolicyEvaluationContext {
   org_id: string;
   user_id?: string;
   agent_id: string;
   session_id?: string;
+  environment: EnforcementMode;
   tool_name: string;
   tool_action: string;
+  risk_class: RiskClass;
   cost_estimate_usd: number;
+  is_sensitive: boolean;
   timestamp: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PolicyEvaluationInput {
@@ -91,15 +219,28 @@ export interface PolicyEvaluationInput {
     policy?: RateLimitPolicy;
     current_calls: number;
   };
+  approval_policies?: ApprovalRequirementDefinition[];
+  policy_version_id?: string;
 }
 
 export interface PolicyEvaluationResult {
   decision: GovernorDecision;
+  reason: string;
   trace: DecisionTraceItem[];
+  warnings: string[];
   matched_rule_ids: string[];
+  matched_policy_version_id?: string;
   budget_snapshot: BudgetSnapshot;
   rate_limit_snapshot?: RateLimitSnapshot;
+  normalized_facts: Record<string, unknown>;
+  enforcement_mode: EnforcementMode;
+  risk_class: RiskClass;
+  duration_ms?: number;
 }
+
+// ──────────────────────────────────────────────────────────────
+// API Request / Response
+// ──────────────────────────────────────────────────────────────
 
 export interface EvaluateRequest {
   org_id: string;
@@ -110,15 +251,76 @@ export interface EvaluateRequest {
   tool_action: string;
   cost_estimate_usd?: number;
   input_summary?: string;
+  environment?: EnforcementMode;
+  metadata?: Record<string, unknown>;
+  dry_run?: boolean;
 }
 
 export interface EvaluateResponse {
   request_id: string;
   decision: GovernorDecision;
+  reason: string;
   trace: DecisionTraceItem[];
+  warnings: string[];
+  risk_class: RiskClass;
+  enforcement_mode: EnforcementMode;
   approval_request_id?: string;
   matched_rule_ids: string[];
+  matched_policy_version_id?: string;
+  duration_ms: number;
 }
+
+export interface ExplainResponse extends EvaluateResponse {
+  explanation: string[];
+  normalized_facts: Record<string, unknown>;
+}
+
+export interface SimulateRequest extends EvaluateRequest {
+  policy_version_id?: string;
+}
+
+export interface SimulateResponse {
+  current: EvaluateResponse;
+  simulated: EvaluateResponse;
+  diff: {
+    decision_changed: boolean;
+    current_decision: GovernorDecision;
+    simulated_decision: GovernorDecision;
+  };
+}
+
+export interface BlastRadiusRequest {
+  org_id: string;
+  policy_version_id: string;
+  lookback_days?: number;
+  sample_size?: number;
+}
+
+export interface BlastRadiusResponse {
+  total_evaluations: number;
+  sampled: number;
+  flipped: {
+    allow_to_deny: number;
+    allow_to_approval: number;
+    approval_to_deny: number;
+    deny_to_allow: number;
+    approval_to_allow: number;
+  };
+  estimated_blocked_spend_usd: number;
+  most_affected_tools: { tool: string; flips: number }[];
+  most_affected_agents: { agent_id: string; flips: number }[];
+  sample_events: {
+    tool_name: string;
+    tool_action: string;
+    current_decision: GovernorDecision;
+    simulated_decision: GovernorDecision;
+    cost_estimate_usd: number;
+  }[];
+}
+
+// ──────────────────────────────────────────────────────────────
+// Audit
+// ──────────────────────────────────────────────────────────────
 
 export interface AuditEventRecord {
   id: string;
@@ -147,16 +349,30 @@ export interface ApprovalRequestRecord {
   session_id?: string | null;
   tool_name: string;
   tool_action: string;
+  risk_class?: RiskClass | null;
   cost_estimate_usd: number;
-  status: "PENDING" | "APPROVED" | "DENIED";
+  status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED" | "CANCELED";
+  reason?: string | null;
+  evidence_json?: Record<string, unknown> | null;
   requested_at: string;
+  expires_at?: string | null;
   decided_at?: string | null;
   decided_by?: string | null;
   trace: DecisionTraceItem[];
 }
 
-export type AgentRuntimeSource = "OPENAI" | "ANTHROPIC" | "GEMINI" | "LANGCHAIN" | "MCP" | "CUSTOM";
+// ──────────────────────────────────────────────────────────────
+// Telemetry
+// ──────────────────────────────────────────────────────────────
+
+export type AgentRuntimeSource =
+  | "OPENAI" | "ANTHROPIC" | "GEMINI" | "LANGCHAIN" | "MCP" | "CUSTOM"
+  | "ZAPIER" | "MINDSTUDIO" | "LINDY" | "AGENTGPT" | "RELEVANCE_AI"
+  | "COPILOT_STUDIO" | "VERTEX_AI" | "AGENTFORCE" | "WATSONX"
+  | "CREWAI" | "AUTOGEN" | "PYDANTIC_AI" | "N8N" | "MAKE" | "WEBHOOK";
+
 export type AgentRunStatus = "RUNNING" | "SUCCESS" | "ERROR" | "CANCELED";
+
 export type AgentEventType =
   | "RUN_STARTED"
   | "RUN_COMPLETED"

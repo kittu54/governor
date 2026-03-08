@@ -2,9 +2,13 @@ import type {
   AgentRuntimeSource,
   EvaluateRequest,
   EvaluateResponse,
+  ExplainResponse,
   IngestEventInput,
   IngestEventsRequest,
-  IngestEventsResponse
+  IngestEventsResponse,
+  RiskClass,
+  EnforcementMode,
+  DecisionTraceItem,
 } from "@governor/shared";
 
 export interface GovernorClientConfig {
@@ -14,6 +18,10 @@ export interface GovernorClientConfig {
   user_id?: string;
   agent_id: string;
   session_id?: string;
+  environment?: EnforcementMode;
+  timeout_ms?: number;
+  max_retries?: number;
+  on_error?: "throw" | "allow" | "deny";
 }
 
 export interface WrapToolOptions<TArgs extends unknown[], TResult> {
@@ -40,16 +48,33 @@ export interface TelemetryRunOptions {
 }
 
 export class GovernorDeniedError extends Error {
-  constructor(message: string, public readonly trace: unknown[]) {
+  public readonly risk_class?: RiskClass;
+  public readonly enforcement_mode?: EnforcementMode;
+  constructor(
+    message: string,
+    public readonly trace: DecisionTraceItem[],
+    public readonly reason?: string,
+    opts?: { risk_class?: RiskClass; enforcement_mode?: EnforcementMode }
+  ) {
     super(message);
     this.name = "GovernorDeniedError";
+    this.risk_class = opts?.risk_class;
+    this.enforcement_mode = opts?.enforcement_mode;
   }
 }
 
 export class GovernorApprovalRequiredError extends Error {
-  constructor(message: string, public readonly approval_request_id: string | undefined, public readonly trace: unknown[]) {
+  public readonly risk_class?: RiskClass;
+  constructor(
+    message: string,
+    public readonly approval_request_id: string | undefined,
+    public readonly trace: DecisionTraceItem[],
+    public readonly reason?: string,
+    opts?: { risk_class?: RiskClass }
+  ) {
     super(message);
     this.name = "GovernorApprovalRequiredError";
+    this.risk_class = opts?.risk_class;
   }
 }
 
@@ -64,22 +89,74 @@ function createEventId() {
   return `evt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  maxRetries: number,
+  timeoutMs?: number,
+): Promise<Response> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      if (timeout) clearTimeout(timeout);
+      if (response.status >= 500 && attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempt)));
+        continue;
+      }
+      return response;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw lastError ?? new Error("Request failed after retries");
+}
+
 export function createGovernor(config: GovernorClientConfig) {
+  const maxRetries = config.max_retries ?? 2;
+  const timeoutMs = config.timeout_ms;
+  const onError = config.on_error ?? "throw";
+
+  function headers(): Record<string, string> {
+    return {
+      "content-type": "application/json",
+      ...(config.api_key ? { authorization: `Bearer ${config.api_key}` } : {}),
+    };
+  }
+
   async function evaluate(request: EvaluateRequest): Promise<EvaluateResponse> {
-    const response = await fetch(joinUrl(config.api_base_url, "/v1/evaluate"), {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(config.api_key ? { authorization: `Bearer ${config.api_key}` } : {})
-      },
-      body: JSON.stringify(request)
-    });
+    const response = await fetchWithRetry(
+      joinUrl(config.api_base_url, "/v1/evaluate"),
+      { method: "POST", headers: headers(), body: JSON.stringify(request) },
+      maxRetries,
+      timeoutMs,
+    );
 
     if (!response.ok) {
       throw new Error(`Governor evaluate failed: ${response.status}`);
     }
 
     return (await response.json()) as EvaluateResponse;
+  }
+
+  async function evaluateExplain(request: EvaluateRequest): Promise<ExplainResponse> {
+    const response = await fetchWithRetry(
+      joinUrl(config.api_base_url, "/v1/evaluate/explain"),
+      { method: "POST", headers: headers(), body: JSON.stringify(request) },
+      maxRetries,
+      timeoutMs,
+    );
+
+    if (!response.ok) {
+      throw new Error(`Governor explain failed: ${response.status}`);
+    }
+
+    return (await response.json()) as ExplainResponse;
   }
 
   async function complete(request_id: string, payload: {
@@ -125,43 +202,65 @@ export function createGovernor(config: GovernorClientConfig) {
       const cost_estimate_usd = options.costEstimator?.(...args) ?? 0;
       const input_summary = options.inputSummarizer?.(...args);
 
-      const evaluation = await evaluate({
-        org_id: config.org_id,
-        user_id: config.user_id,
-        agent_id: config.agent_id,
-        session_id: config.session_id,
-        tool_name: options.tool_name,
-        tool_action: options.tool_action,
-        cost_estimate_usd,
-        input_summary
-      });
+      let evaluation: EvaluateResponse;
+      try {
+        evaluation = await evaluate({
+          org_id: config.org_id,
+          user_id: config.user_id,
+          agent_id: config.agent_id,
+          session_id: config.session_id,
+          tool_name: options.tool_name,
+          tool_action: options.tool_action,
+          cost_estimate_usd,
+          input_summary,
+          environment: config.environment,
+        });
+      } catch (err) {
+        if (onError === "allow") {
+          return options.handler(...args);
+        } else if (onError === "deny") {
+          throw new GovernorDeniedError(
+            "Governor unreachable and configured to deny on error",
+            [],
+            "Governor API unavailable"
+          );
+        }
+        throw err;
+      }
 
       if (evaluation.decision === "DENY") {
-        throw new GovernorDeniedError("Tool invocation denied by Governor policy", evaluation.trace);
+        throw new GovernorDeniedError(
+          evaluation.reason ?? "Tool invocation denied by Governor policy",
+          evaluation.trace,
+          evaluation.reason,
+          { risk_class: evaluation.risk_class, enforcement_mode: evaluation.enforcement_mode }
+        );
       }
 
       if (evaluation.decision === "REQUIRE_APPROVAL") {
         throw new GovernorApprovalRequiredError(
-          "Tool invocation requires approval",
+          evaluation.reason ?? "Tool invocation requires approval",
           evaluation.approval_request_id,
-          evaluation.trace
+          evaluation.trace,
+          evaluation.reason,
+          { risk_class: evaluation.risk_class }
         );
       }
 
       try {
         const result = await options.handler(...args);
-        await complete(evaluation.request_id, {
+        complete(evaluation.request_id, {
           status: "SUCCESS",
           latency_ms: Math.round(performance.now() - startedAt),
-          output_summary: options.outputSummarizer?.(result)
-        });
+          output_summary: options.outputSummarizer?.(result),
+        }).catch(() => {});
         return result;
       } catch (error) {
-        await complete(evaluation.request_id, {
+        complete(evaluation.request_id, {
           status: "ERROR",
           latency_ms: Math.round(performance.now() - startedAt),
-          error_message: error instanceof Error ? error.message : "Unknown error"
-        });
+          error_message: error instanceof Error ? error.message : "Unknown error",
+        }).catch(() => {});
         throw error;
       }
     };
@@ -406,6 +505,8 @@ export function createGovernor(config: GovernorClientConfig) {
   }
 
   return {
+    evaluate,
+    evaluateExplain,
     wrapTool,
     wrapFetch,
     wrapOpenAITool,
@@ -430,12 +531,17 @@ export function createGovernorFromEnv() {
     throw new Error("GOVERNOR_ORG_ID and GOVERNOR_AGENT_ID are required");
   }
 
+  const envMap: Record<string, EnforcementMode> = { DEV: "DEV", STAGING: "STAGING", PROD: "PROD" };
+  const environment = envMap[process.env.GOVERNOR_ENVIRONMENT ?? ""] as EnforcementMode | undefined;
+
   return createGovernor({
     api_base_url,
     api_key: process.env.GOVERNOR_API_KEY,
     org_id,
     agent_id,
     user_id: process.env.GOVERNOR_USER_ID,
-    session_id: process.env.GOVERNOR_SESSION_ID
+    session_id: process.env.GOVERNOR_SESSION_ID,
+    environment,
+    on_error: (process.env.GOVERNOR_ON_ERROR as "throw" | "allow" | "deny") || undefined,
   });
 }

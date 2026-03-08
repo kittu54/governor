@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ──────────────────────────────────────────────────────────────
+// ENUMS
+// ──────────────────────────────────────────────────────────────
+
 enum Decision {
   ALLOW
   DENY
@@ -25,6 +29,8 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   DENIED
+  EXPIRED
+  CANCELED
 }
 
 enum RunStatus {
@@ -70,34 +76,128 @@ enum AgentEventType {
   APPROVAL_REQUESTED
 }
 
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PolicyEffect {
+  ALLOW
+  DENY
+}
+
+enum RiskClass {
+  MONEY_MOVEMENT
+  EXTERNAL_COMMUNICATION
+  DATA_EXPORT
+  DATA_WRITE
+  CODE_EXECUTION
+  FILE_MUTATION
+  CREDENTIAL_USE
+  PII_ACCESS
+  ADMIN_ACTION
+  LOW_RISK
+}
+
+enum EnforcementMode {
+  DEV
+  STAGING
+  PROD
+}
+
+enum PolicyStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BudgetPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ScopeType {
+  ORG
+  AGENT
+  TOOL
+  RISK_CLASS
+}
+
+enum ApprovalActionType {
+  APPROVE
+  DENY
+  ESCALATE
+  COMMENT
+}
+
+enum AuditActorType {
+  SYSTEM
+  USER
+  AGENT
+}
+
+// ──────────────────────────────────────────────────────────────
+// ORGANIZATION / USER / AUTH
+// ──────────────────────────────────────────────────────────────
+
 model Organization {
-  id               String              @id
-  name             String
-  createdAt        DateTime            @default(now())
-  agents           Agent[]
-  rules            PolicyRule[]
-  thresholds       ApprovalThreshold[]
-  budgets          BudgetLimit[]
-  rateLimits       RateLimitPolicy[]
-  audits           AuditEvent[]
-  approvalRequests ApprovalRequest[]
-  runs             AgentRun[]
-  agentEvents      AgentEvent[]
-  apiKeys          ApiKey[]
+  id                 String              @id
+  name               String
+  slug               String?             @unique
+  plan               String              @default("free")
+  defaultMode        EnforcementMode     @default(DEV)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @default(now()) @updatedAt
+  agents             Agent[]
+  policyRules        PolicyRule[]
+  thresholds         ApprovalThreshold[]
+  budgetLimits       BudgetLimit[]
+  rateLimitPolicies  RateLimitPolicy[]
+  auditEvents        AuditEvent[]
+  approvalRequests   ApprovalRequest[]
+  runs               AgentRun[]
+  agentEvents        AgentEvent[]
+  apiKeys            ApiKey[]
+  tools              Tool[]
+  policies           Policy[]
+  budgets            Budget[]
+  rateLimits         RateLimit[]
+  approvalPolicies   ApprovalPolicy[]
+  evaluations        Evaluation[]
+  auditLog           AuditLog[]
+  webhooks           Webhook[]
+  users              User[]
+}
+
+model User {
+  id          String   @id @default(cuid())
+  orgId       String
+  email       String
+  displayName String?
+  role        String   @default("member")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, email])
+  @@index([orgId])
 }
 
 model ApiKey {
-  id          String   @id @default(cuid())
-  orgId       String
-  name        String
-  keyHash     String   @unique
-  keyPrefix   String
-  framework   String?
-  scopes      Json?
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime @default(now())
+  id         String    @id @default(cuid())
+  orgId      String
+  name       String
+  keyHash    String    @unique
+  keyPrefix  String
+  framework  String?
+  scopes     Json?
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -105,11 +205,9 @@ model ApiKey {
   @@index([keyHash])
 }
 
-enum AgentStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
+// ──────────────────────────────────────────────────────────────
+// AGENT
+// ──────────────────────────────────────────────────────────────
 
 model Agent {
   id               String              @id
@@ -117,22 +215,96 @@ model Agent {
   name             String
   description      String?
   status           AgentStatus         @default(ACTIVE)
+  environment      EnforcementMode     @default(DEV)
   framework        String?
+  provider         String?
   tags             Json?
   allowedTools     Json?
   metadata         Json?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   organization     Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  audits           AuditEvent[]
+  auditEvents      AuditEvent[]
   approvalRequests ApprovalRequest[]
   runs             AgentRun[]
   agentEvents      AgentEvent[]
+  evaluations      Evaluation[]
 
   @@index([orgId])
   @@index([orgId, status])
   @@index([orgId, framework])
 }
+
+// ──────────────────────────────────────────────────────────────
+// TOOL REGISTRY
+// ──────────────────────────────────────────────────────────────
+
+model Tool {
+  id          String    @id @default(cuid())
+  orgId       String
+  toolName    String
+  toolAction  String
+  displayName String?
+  description String?
+  riskClass   RiskClass @default(LOW_RISK)
+  isSensitive Boolean   @default(false)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, toolName, toolAction])
+  @@index([orgId])
+  @@index([orgId, riskClass])
+}
+
+// ──────────────────────────────────────────────────────────────
+// VERSIONED POLICY SYSTEM
+// ──────────────────────────────────────────────────────────────
+
+model Policy {
+  id               String          @id @default(cuid())
+  orgId            String
+  name             String
+  description      String?
+  status           PolicyStatus    @default(DRAFT)
+  enforcementMode  EnforcementMode @default(DEV)
+  createdBy        String?
+  currentVersionId String?         @unique
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @default(now()) @updatedAt
+
+  organization   Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  currentVersion PolicyVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions       PolicyVersion[] @relation("PolicyVersions")
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+model PolicyVersion {
+  id             String   @id @default(cuid())
+  policyId       String
+  versionNumber  Int
+  definitionJson Json
+  checksum       String
+  changeSummary  String?
+  createdBy      String?
+  isPublished    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  policy          Policy       @relation("PolicyVersions", fields: [policyId], references: [id], onDelete: Cascade)
+  currentOfPolicy Policy?      @relation("CurrentVersion")
+  evaluations     Evaluation[]
+
+  @@unique([policyId, versionNumber])
+  @@index([policyId])
+}
+
+// ──────────────────────────────────────────────────────────────
+// LEGACY POLICY PRIMITIVES (kept for backward compatibility)
+// ──────────────────────────────────────────────────────────────
 
 model PolicyRule {
   id         String       @id @default(cuid())
@@ -143,6 +315,8 @@ model PolicyRule {
   effect     PolicyEffect
   priority   Int          @default(100)
   reason     String?
+  riskClass  RiskClass?
+  conditions Json?
   createdAt  DateTime     @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -150,19 +324,15 @@ model PolicyRule {
   @@index([orgId, agentId])
 }
 
-enum PolicyEffect {
-  ALLOW
-  DENY
-}
-
 model ApprovalThreshold {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   orgId      String
   agentId    String?
   toolName   String
   toolAction String
   amountUsd  Float
-  createdAt  DateTime @default(now())
+  riskClass  RiskClass?
+  createdAt  DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -193,9 +363,172 @@ model RateLimitPolicy {
   @@index([orgId, agentId])
 }
 
+// ──────────────────────────────────────────────────────────────
+// V2 BUDGETS & RATE LIMITS (scoped by type)
+// ──────────────────────────────────────────────────────────────
+
+model Budget {
+  id           String       @id @default(cuid())
+  orgId        String
+  scopeType    ScopeType    @default(ORG)
+  scopeId      String?
+  period       BudgetPeriod @default(DAILY)
+  limitUsd     Float
+  warnAtUsd    Float?
+  hardStop     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, scopeType, scopeId])
+}
+
+model RateLimit {
+  id            String    @id @default(cuid())
+  orgId         String
+  scopeType     ScopeType @default(ORG)
+  scopeId       String?
+  windowSeconds Int       @default(60)
+  maxCalls      Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, scopeType, scopeId])
+}
+
+// ──────────────────────────────────────────────────────────────
+// APPROVAL SYSTEM
+// ──────────────────────────────────────────────────────────────
+
+model ApprovalPolicy {
+  id                   String    @id @default(cuid())
+  orgId                String
+  name                 String
+  riskClass            RiskClass?
+  toolName             String?
+  toolAction           String?
+  thresholdUsd         Float?
+  requiresReason       Boolean   @default(false)
+  autoExpireSeconds    Int       @default(3600)
+  escalationPolicyJson Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model ApprovalRequest {
+  id              String         @id @default(cuid())
+  orgId           String
+  userId          String?
+  agentId         String
+  runId           String?
+  evaluationId    String?
+  sessionId       String?
+  toolName        String
+  toolAction      String
+  riskClass       RiskClass?
+  costEstimateUsd Float
+  status          ApprovalStatus @default(PENDING)
+  reason          String?
+  evidenceJson    Json?
+  requestedAt     DateTime       @default(now())
+  expiresAt       DateTime?
+  decidedAt       DateTime?
+  decidedBy       String?
+  trace           Json
+
+  organization    Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent           Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  actions         ApprovalAction[]
+
+  @@index([orgId, status, requestedAt])
+  @@index([agentId, status])
+}
+
+model ApprovalAction {
+  id                String             @id @default(cuid())
+  approvalRequestId String
+  actorUserId       String?
+  action            ApprovalActionType
+  comment           String?
+  createdAt         DateTime           @default(now())
+
+  approvalRequest ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+
+  @@index([approvalRequestId])
+}
+
+// ──────────────────────────────────────────────────────────────
+// EVALUATION (governance decision records)
+// ──────────────────────────────────────────────────────────────
+
+model Evaluation {
+  id                     String          @id @default(cuid())
+  orgId                  String
+  agentId                String
+  runId                  String?
+  toolName               String
+  toolAction             String
+  riskClass              RiskClass?
+  decision               Decision
+  enforcementMode        EnforcementMode
+  costEstimateUsd        Float?
+  matchedPolicyVersionId String?
+  matchedRuleId          String?
+  traceJson              Json
+  inputFactsJson         Json?
+  durationMs             Int?
+  createdAt              DateTime        @default(now())
+
+  organization       Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent              Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  matchedPolicyVersion PolicyVersion? @relation(fields: [matchedPolicyVersionId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([orgId, riskClass])
+  @@index([orgId, decision])
+}
+
+// ──────────────────────────────────────────────────────────────
+// AUDIT LOG (immutable, entity-level)
+// ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String        @id @default(cuid())
+  orgId      String
+  actorType  AuditActorType
+  actorId    String?
+  eventType  String
+  entityType String
+  entityId   String?
+  summary    String
+  payload    Json?
+  checksum   String?
+  createdAt  DateTime      @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, eventType])
+}
+
+// ──────────────────────────────────────────────────────────────
+// LEGACY AUDIT EVENTS (kept for backward compatibility)
+// ──────────────────────────────────────────────────────────────
+
 model AuditEvent {
-  id              String     @id @default(cuid())
-  timestamp       DateTime   @default(now())
+  id              String      @id @default(cuid())
+  timestamp       DateTime    @default(now())
   orgId           String
   userId          String?
   agentId         String
@@ -203,7 +536,7 @@ model AuditEvent {
   toolName        String
   toolAction      String
   decision        Decision
-  costEstimateUsd Float      @default(0)
+  costEstimateUsd Float       @default(0)
   latencyMs       Int?
   status          AuditStatus
   policyTrace     Json
@@ -218,26 +551,29 @@ model AuditEvent {
   @@index([agentId, timestamp])
 }
 
-model ApprovalRequest {
-  id              String         @id @default(cuid())
-  orgId           String
-  userId          String?
-  agentId         String
-  sessionId       String?
-  toolName        String
-  toolAction      String
-  costEstimateUsd Float
-  status          ApprovalStatus @default(PENDING)
-  requestedAt     DateTime       @default(now())
-  decidedAt       DateTime?
-  decidedBy       String?
-  trace           Json
+// ──────────────────────────────────────────────────────────────
+// WEBHOOKS
+// ──────────────────────────────────────────────────────────────
+
+model Webhook {
+  id             String    @id @default(cuid())
+  orgId          String
+  targetUrl      String
+  secret         String
+  eventTypes     Json
+  isActive       Boolean   @default(true)
+  lastDeliveryAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  @@index([orgId, status, requestedAt])
+  @@index([orgId])
 }
+
+// ──────────────────────────────────────────────────────────────
+// RUNS & EVENTS (telemetry)
+// ──────────────────────────────────────────────────────────────
 
 model AgentRun {
   id                String       @id

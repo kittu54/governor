@@ -23,7 +23,6 @@ export const authPlugin: FastifyPluginAsync = async (app) => {
     try {
       const verified = await verifyToken(token, {
         secretKey: app.config.CLERK_SECRET_KEY,
-        issuer: app.config.CLERK_JWT_ISSUER
       });
 
       request.auth.userId = verified.sub;

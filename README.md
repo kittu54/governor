@@ -1,6 +1,8 @@
 # Governor
 
-Governor is a visual-first AI Governance Control Tower for tool-using AI agents. It sits between your AI agents and the tools they invoke, enforcing policy decisions in real time while capturing full telemetry for observability and compliance.
+Governor is an AI Governance Control Tower for tool-using AI agents. It sits between your AI agents and the tools they invoke, enforcing policy decisions in real time while capturing full telemetry for observability and compliance.
+
+It works with agents built on **any framework** — LangChain, CrewAI, AutoGen, n8n, Zapier, MindStudio, Vertex AI, Copilot Studio, or custom SDKs — and provides a unified governance, approval, and audit layer.
 
 ## What Governor Does
 
@@ -9,7 +11,7 @@ Governor is a visual-first AI Governance Control Tower for tool-using AI agents.
 │                        Your AI Application                         │
 │                                                                    │
 │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐       │
-│  │ OpenAI   │   │ Anthropic│   │ Gemini   │   │LangChain │       │
+│  │ LangChain│   │ CrewAI   │   │ n8n      │   │ Custom   │       │
 │  │  Agent   │   │  Agent   │   │  Agent   │   │  Agent   │       │
 │  └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘       │
 │       │              │              │              │               │
@@ -28,37 +30,42 @@ Governor is a visual-first AI Governance Control Tower for tool-using AI agents.
 │  ┌─────────────────────┐   ┌──────────────────────────────────┐   │
 │  │   Policy Engine      │   │         Fastify API               │   │
 │  │                     │   │                                  │   │
-│  │  Rules (ALLOW/DENY) │   │  /v1/evaluate    /v1/runs       │   │
-│  │  Budget limits      │   │  /v1/audit       /v1/metrics    │   │
-│  │  Rate limits        │   │  /v1/approvals   /v1/ingest     │   │
-│  │  Approval thresholds│   │  /v1/policies    /v1/events     │   │
+│  │  Conditions DSL     │   │  /v1/evaluate    /v1/tools       │   │
+│  │  Risk classification│   │  /v1/policies    /v1/audit-log   │   │
+│  │  Enforcement modes  │   │  /v1/approvals   /v1/metrics     │   │
+│  │  Version + compile  │   │  /v1/webhooks    /v1/ingest      │   │
 │  └─────────────────────┘   └──────────────────────────────────┘   │
 │                                                                    │
 │  ┌─────────────────────┐   ┌──────────────────────────────────┐   │
 │  │   PostgreSQL 16     │   │          Redis 7                 │   │
 │  │                     │   │                                  │   │
-│  │  Audit events       │   │  Rate limit counters             │   │
-│  │  Runs & events      │   │  SSE pub/sub                    │   │
-│  │  Policies & rules   │   │  Budget spend cache             │   │
-│  │  Approval requests  │   │                                  │   │
+│  │  Evaluations        │   │  Rate limit counters             │   │
+│  │  Audit logs         │   │  SSE pub/sub                    │   │
+│  │  Policy versions    │   │  Budget spend cache             │   │
+│  │  Tool registry      │   │                                  │   │
 │  └─────────────────────┘   └──────────────────────────────────┘   │
 │                                                                    │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │                  Console (Next.js 15)                         │  │
 │  │                                                              │  │
-│  │  Overview Dashboard  │  Run Explorer    │  Policy Studio     │  │
-│  │  Live Timeline       │  Approvals Inbox │  Agent Analytics   │  │
+│  │  Overview Dashboard  │  Run Explorer    │  Policy Studio v2  │  │
+│  │  Tool Registry       │  Approvals Inbox │  Audit Explorer    │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 **Core capabilities:**
 
-- **Governance Gateway SDK** — wraps tool calls and enforces policy decisions before execution.
-- **Policy Engine** — evaluates rules, budgets, rate limits, and approval thresholds with traceable `ALLOW`, `DENY`, and `REQUIRE_APPROVAL` decisions.
-- **Full Audit Trail** — stores every governance decision, tool invocation, model call, and outcome.
+- **Governance Gateway SDK** — wraps tool calls and enforces policy decisions before execution, with retry logic and configurable fallback.
+- **Policy Engine** — evaluates rules using a conditions DSL, semantic risk classification, enforcement modes (DEV/STAGING/PROD), budget checks, rate limits, and approval requirements.
+- **Policy Versioning** — create, version, compile, publish, and roll back policy sets with full diff and audit trail.
+- **Risk Classification** — semantic taxonomy (MONEY_MOVEMENT, CODE_EXECUTION, PII_ACCESS, etc.) with auto-classification heuristics and admin overrides.
+- **Tool Registry** — centralized catalog of tools with risk class assignments, sensitivity flags, and auto-classify.
+- **Approval Workflows** — operator-centric inbox with approve/deny/escalate/comment, evidence capture, expiry, and SLA tracking.
+- **Full Audit Trail** — immutable entity-level audit log alongside governance decision records and evaluation traces.
+- **Webhooks** — event-driven notifications for external integrations.
 - **Telemetry Ingestion** — captures run-level and event-level data from any AI provider.
-- **Visual Console** — dashboards for operations, approvals, policy authoring, and run-level analytics.
+- **Visual Console** — dashboards for operations, approvals, policy authoring, tool registry, and risk analytics.
 
 ## How Policy Evaluation Works
 
@@ -68,56 +75,85 @@ When an agent invokes a tool through the Governor SDK, the policy engine evaluat
 Tool call arrives
        │
        ▼
-┌──────────────┐     Budget exceeded?
-│ Budget Check │────── YES ──▶ DENY (org or agent daily limit exceeded)
-└──────┬───────┘
+┌──────────────────┐
+│ Risk Classify    │ Determine risk class (registry → heuristics → default)
+└──────┬───────────┘
+       ▼
+┌──────────────────┐     Sensitive action in PROD with no explicit ALLOW?
+│ Environment +    │────── YES ──▶ DENY (safe-by-default in PROD)
+│ Sensitivity Check│
+└──────┬───────────┘
        │ NO
        ▼
-┌──────────────┐     Calls ≥ limit?
-│ Rate Limit   │────── YES ──▶ DENY (rate limit exceeded)
-└──────┬───────┘
+┌──────────────────┐     Budget exceeded?
+│ Budget Check     │────── YES ──▶ DENY (org or agent daily limit exceeded)
+└──────┬───────────┘
        │ NO
        ▼
-┌──────────────┐     Matching DENY rule?
-│ Rule Match   │────── YES ──▶ DENY (blocked by rule)
-│ (by priority)│
-└──────┬───────┘
+┌──────────────────┐     Calls ≥ limit?
+│ Rate Limit       │────── YES ──▶ DENY (rate limit exceeded)
+└──────┬───────────┘
        │ NO
        ▼
-┌──────────────┐     Cost > threshold?
-│ Approval     │────── YES ──▶ REQUIRE_APPROVAL
-│ Thresholds   │
-└──────┬───────┘
+┌──────────────────┐     Matching DENY rule (with conditions)?
+│ Explicit DENY    │────── YES ──▶ DENY (blocked by rule)
+│ Rules            │
+└──────┬───────────┘
        │ NO
        ▼
-┌──────────────┐     Matching ALLOW rule?
-│ Allow Rule   │────── YES ──▶ ALLOW (explicit rule)
-└──────┬───────┘
+┌──────────────────┐     Approval required by risk class or threshold?
+│ Approval Check   │────── YES ──▶ REQUIRE_APPROVAL
+│                  │
+└──────┬───────────┘
        │ NO
        ▼
-   DEFAULT ALLOW
+┌──────────────────┐     Matching ALLOW rule?
+│ Allow Rules      │────── YES ──▶ ALLOW (explicit rule)
+└──────┬───────────┘
+       │ NO
+       ▼
+   DEFAULT (mode-dependent: ALLOW in DEV/STAGING, DENY sensitive in PROD)
 ```
 
-Every evaluation returns a **decision trace** — an array of `DecisionTraceItem` objects showing each step the engine considered, enabling full auditability.
+Every evaluation returns a **decision trace** — an array of `DecisionTraceItem` objects showing each step the engine considered, and the `explain()` utility converts traces to human-readable text.
+
+## Risk Classes
+
+Governor uses a semantic risk taxonomy to classify tool actions:
+
+| Risk Class | Severity | Examples |
+|------------|----------|----------|
+| `MONEY_MOVEMENT` | Critical (95) | `stripe.refund`, `paypal.transfer` |
+| `CODE_EXECUTION` | Critical (90) | `shell.exec`, `docker.run` |
+| `ADMIN_ACTION` | Critical (90) | `iam.grant`, `k8s.deploy` |
+| `CREDENTIAL_USE` | Critical (85) | `vault.read`, `aws.assume_role` |
+| `EXTERNAL_COMMUNICATION` | High (80) | `gmail.send`, `twilio.sms` |
+| `DATA_EXPORT` | High (75) | `s3.export`, `bigquery.export` |
+| `PII_ACCESS` | High (85) | `customer.lookup`, `user.get_pii` |
+| `DATA_WRITE` | Medium (60) | `postgres.update`, `mongo.insert` |
+| `FILE_MUTATION` | Medium (75) | `fs.delete`, `s3.delete` |
+| `LOW_RISK` | Low (10) | `http.GET`, `cache.read` |
+
+Tools are classified by: (1) registered overrides in the tool registry, (2) default keyword-based heuristics, or (3) fallback to `LOW_RISK`.
 
 ## Monorepo Structure
 
 ```
 governor/
 ├── apps/
-│   ├── api/              Fastify API service — policy, audit, ingest, metrics, approvals
-│   │   ├── src/modules/  Feature modules (policy, audit, approvals, ingest, runs, metrics, events)
+│   ├── api/              Fastify API service — governance, audit, tools, metrics, webhooks
+│   │   ├── src/modules/  Feature modules (policy, tools, approvals, audit, metrics, webhooks, etc.)
 │   │   ├── prisma/       Database schema, migrations, and seed data
 │   │   └── test/         Integration tests
 │   │
 │   └── console/          Next.js 15 visual control tower
-│       ├── src/app/      App Router pages (dashboard, runs, approvals, policy-studio, etc.)
-│       └── src/components/ UI components (layout, charts, policy, timeline, approvals)
+│       ├── src/app/      App Router pages (overview, runs, approvals, policy-studio, tools, audit, etc.)
+│       └── src/components/ UI components (layout, charts, policy, tools, approvals, audit)
 │
 ├── packages/
-│   ├── sdk/              Integration SDK — wrapTool, telemetry, provider adapters
-│   ├── policy-engine/    Pure TypeScript policy evaluation logic with unit tests
-│   └── shared/           Shared types, Zod schemas, and validation contracts
+│   ├── sdk/              Integration SDK — wrapTool, telemetry, provider adapters, error classes
+│   ├── policy-engine/    Pure TypeScript policy evaluation, conditions DSL, compile, explain
+│   └── shared/           Shared types, Zod schemas, risk taxonomy, and contracts
 │
 ├── docker-compose.yml    Postgres + Redis + API + Console containers
 ├── Makefile              Bootstrap and dev lifecycle commands
@@ -172,8 +208,12 @@ The seed script populates realistic data for immediate exploration:
 | Entity | Count | Details |
 |--------|-------|---------|
 | Organizations | 3 | Multi-tenant demo orgs |
-| Agents | 5 | Across different orgs |
+| Agents | 5 | Support, Finance, Ops, Data, Dev agents |
+| Tools | 14 | Across all risk classes (stripe, gmail, shell, vault, etc.) |
+| Policy Packs | 3 | Customer Support, Finance Ops, Development Sandbox |
+| Approval Policies | 3 | Money Movement, Data Export, Admin Action |
 | Audit events | 2,000 | Governance decision records |
+| Audit log entries | 8 | Entity-level audit trail |
 | Pending approvals | 20 | Awaiting action |
 | Runs | 450 | Across OpenAI / Anthropic / Gemini / LangChain |
 | Run events | Thousands | Token, cost, latency, and tool metadata |
@@ -192,7 +232,6 @@ The seed script populates realistic data for immediate exploration:
 | `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origins |
 | `CLERK_SECRET_KEY` | No | — | Clerk backend key (placeholder = local mode) |
 | `CLERK_PUBLISHABLE_KEY` | No | — | Clerk frontend key (placeholder = local mode) |
-| `CLERK_JWT_ISSUER` | No | — | Clerk JWT issuer URL |
 | **Console** | | | |
 | `NEXT_PUBLIC_API_BASE_URL` | Yes | — | API URL for browser requests |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | No | — | Clerk frontend key |
@@ -203,6 +242,8 @@ The seed script populates realistic data for immediate exploration:
 | `GOVERNOR_AGENT_ID` | Yes | — | Agent ID for SDK context |
 | `GOVERNOR_USER_ID` | No | — | User ID for SDK context |
 | `GOVERNOR_SESSION_ID` | No | — | Session ID for SDK context |
+| `GOVERNOR_ENVIRONMENT` | No | — | Enforcement mode (DEV, STAGING, PROD) |
+| `GOVERNOR_ON_ERROR` | No | `throw` | Behavior if Governor is unreachable (throw, allow, deny) |
 
 ## SDK Usage
 
@@ -218,7 +259,11 @@ const gov = createGovernor({
   api_base_url: "https://your-governor.example.com",
   org_id: "org_acme",
   agent_id: "agent_support_1",
-  api_key: "your-api-key"
+  api_key: "your-api-key",
+  environment: "PROD",
+  on_error: "deny",
+  max_retries: 3,
+  timeout_ms: 5000,
 });
 
 // Option 2: From environment variables
@@ -242,10 +287,12 @@ const refund = gov.wrapTool({
 });
 
 // This call will:
-//   1. Evaluate policies (rules, budgets, rate limits, thresholds)
-//   2. If ALLOW → execute handler → record SUCCESS in audit
-//   3. If DENY → throw GovernorDeniedError (handler never executes)
-//   4. If REQUIRE_APPROVAL → throw GovernorApprovalRequiredError
+//   1. Classify risk (MONEY_MOVEMENT for stripe.refund)
+//   2. Check enforcement mode (DEV=audit, STAGING=warn, PROD=enforce)
+//   3. Evaluate policies (budgets, rate limits, rules with conditions, approvals)
+//   4. If ALLOW → execute handler → record SUCCESS in audit
+//   5. If DENY → throw GovernorDeniedError (handler never executes)
+//   6. If REQUIRE_APPROVAL → throw GovernorApprovalRequiredError
 await refund({ amount_usd: 75, charge_id: "ch_abc123" });
 ```
 
@@ -258,14 +305,14 @@ try {
   await refund({ amount_usd: 500, charge_id: "ch_xyz" });
 } catch (error) {
   if (error instanceof GovernorDeniedError) {
-    // Policy blocked this call — inspect the trace for details
-    console.log("Denied:", error.trace);
+    console.log("Denied:", error.reason);
+    console.log("Risk class:", error.risk_class);
+    console.log("Enforcement mode:", error.enforcement_mode);
+    console.log("Trace:", error.trace);
   } else if (error instanceof GovernorApprovalRequiredError) {
-    // Requires manual approval — store the approval_request_id
     console.log("Approval needed:", error.approval_request_id);
-    // Show UI to the user, or queue for later
+    console.log("Risk class:", error.risk_class);
   } else {
-    // Tool handler itself threw an error (recorded as ERROR in audit)
     throw error;
   }
 }
@@ -274,55 +321,35 @@ try {
 ### Convenience Wrappers
 
 ```ts
-// Governed fetch — wraps any HTTP call through the governance gateway
+// Governed fetch
 const governedFetch = gov.wrapFetch();
-const response = await governedFetch("https://api.example.com/data");
 
-// Governed OpenAI function call tool
+// Governed OpenAI function call
 const searchTool = gov.wrapOpenAITool("web_search", async (args: { query: string }) => {
   return await searchEngine.search(args.query);
 });
 
 // Governed LangChain tool
 const calcTool = gov.wrapLangChainTool("calculator", async (args: { expression: string }) => {
-  return eval(args.expression); // simplified example
+  return evaluate(args.expression);
 });
 ```
 
 ### Telemetry — Run Lifecycle Tracking
 
-Capture full execution traces from any AI provider:
-
 ```ts
-// Create a telemetry run with a provider adapter
 const run = gov.adapters.openai("run_ticket_001", {
   model: "gpt-4.1-mini",
   task_name: "ticket_triage",
   tags: ["support", "tier-1"],
-  metadata: { customer_id: "cust_abc" }
 });
 
 await run.start();
-
-// Track model calls
 await run.modelCall({ prompt: "Classify this support ticket: ..." });
-await run.modelResult({
-  input_tokens: 900,
-  output_tokens: 140,
-  cost_usd: 0.01,
-  latency_ms: 740,
-  output_payload: { classification: "billing" }
-});
-
-// Track tool calls
-await run.toolCall({ tool_name: "zendesk", tool_action: "update_ticket", input_payload: { priority: "high" } });
+await run.modelResult({ input_tokens: 900, output_tokens: 140, cost_usd: 0.01, latency_ms: 740 });
+await run.toolCall({ tool_name: "zendesk", tool_action: "update_ticket" });
 await run.toolResult({ tool_name: "zendesk", tool_action: "update_ticket", status: "SUCCESS", latency_ms: 120 });
-
-// Finalize
-await run.complete({ resolution: "escalated_to_billing" });
-
-// Or if something goes wrong:
-// await run.fail(new Error("API timeout"), { retry_count: 3 });
+await run.complete();
 ```
 
 **Available provider adapters:**
@@ -347,10 +374,9 @@ await run.complete({ resolution: "escalated_to_billing" });
   "agent_id": "agent_support_1",
   "tool_name": "stripe",
   "tool_action": "refund",
-  "cost_estimate_usd": 0.015,
-  "user_id": "user_123",
-  "session_id": "session_abc",
-  "input_summary": "Refund $75 on charge ch_abc"
+  "cost_estimate_usd": 75,
+  "environment": "PROD",
+  "metadata": { "customer_tier": "enterprise" }
 }
 ```
 
@@ -358,276 +384,185 @@ await run.complete({ resolution: "escalated_to_billing" });
 ```json
 {
   "request_id": "clxyz123",
-  "decision": "ALLOW",
+  "decision": "DENY",
+  "reason": "Matched DENY rule: block-high-refunds",
+  "risk_class": "MONEY_MOVEMENT",
+  "enforcement_mode": "PROD",
   "trace": [
-    { "code": "RULE_MATCH", "message": "Matched ALLOW rule rule_1", "metadata": { "rule_id": "rule_1", "effect": "ALLOW", "priority": 10 } },
-    { "code": "BUDGET_CHECK", "message": "Evaluated budget limits", "metadata": { "org_spend_today_usd": 12.50, "org_limit_usd": 500 } },
-    { "code": "RATE_LIMIT_CHECK", "message": "Evaluated rate limit", "metadata": { "limit": 60, "calls_in_current_window": 3 } },
-    { "code": "ALLOW", "message": "Allowed by rule rule_1", "metadata": { "rule_id": "rule_1" } }
+    { "code": "MODE_CHECK", "message": "Enforcement mode: PROD" },
+    { "code": "SENSITIVE_CHECK", "message": "Action marked sensitive (risk class: MONEY_MOVEMENT, severity: high)" },
+    { "code": "RULE_MATCH", "message": "Matched DENY rule: block-high-refunds" }
   ],
-  "matched_rule_ids": ["rule_1"],
-  "approval_request_id": null
+  "matched_rule_ids": [],
+  "approval_request_id": null,
+  "warnings": []
 }
 ```
 
-#### `POST /v1/policies/simulate` — Test policies without side effects
+#### `POST /v1/evaluate/simulate` — Dry-run evaluation (no side effects)
 
-Same request/response shape as `/v1/evaluate`, but does not create audit events or approval requests.
+Same request/response shape as `/v1/evaluate`, but does not create audit events, evaluations, or approval requests.
 
-#### `GET /v1/policies` — List all policies for an org
+#### `POST /v1/evaluate/explain` — Human-readable evaluation explanation
 
-**Query params:** `org_id` (required)
+Returns a line-by-line textual explanation of the evaluation decision.
 
-**Response:** Returns all rules, thresholds, budgets, and rate limits for the organization.
+### Versioned Policies (v2)
 
+#### `GET /v1/policies/v2` — List versioned policies
+#### `POST /v1/policies/v2` — Create a new policy
+
+```json
+{
+  "org_id": "org_acme",
+  "name": "Finance Controls",
+  "description": "Strict rules for payment processing",
+  "enforcement_mode": "PROD"
+}
+```
+
+#### `POST /v1/policies/v2/:id/versions` — Create a policy version
+
+```json
+{
+  "definition": {
+    "rules": [
+      {
+        "name": "block-high-value",
+        "effect": "DENY",
+        "priority": 10,
+        "subjects": [{ "type": "tool", "value": "stripe.refund" }],
+        "conditions": [{ "field": "cost_estimate_usd", "operator": "greater_than", "value": 500 }],
+        "reason": "Refunds over $500 require manual processing"
+      }
+    ]
+  },
+  "change_summary": "Added $500 refund limit"
+}
+```
+
+The definition is compiled and validated, generating a deterministic checksum.
+
+#### `POST /v1/policies/v2/versions/:versionId/publish` — Publish a version
+#### `POST /v1/policies/v2/versions/:versionId/rollback-target` — Rollback to a version
+#### `GET /v1/policies/v2/versions/:versionId/diff/:otherVersionId` — Compare versions
+
+### Tool Registry
+
+#### `GET /v1/tools` — List registered tools
+#### `POST /v1/tools` — Register or upsert a tool
+
+```json
+{
+  "org_id": "org_acme",
+  "tool_name": "stripe",
+  "tool_action": "refund",
+  "risk_class": "MONEY_MOVEMENT",
+  "is_sensitive": true,
+  "display_name": "Stripe Refund",
+  "description": "Process customer refunds via Stripe API"
+}
+```
+
+#### `POST /v1/tools/classify-risk` — Auto-classify a tool's risk
+
+```json
+{ "tool_name": "stripe", "tool_action": "refund" }
+```
+
+Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confidence": 0.95 }`
+
+#### `GET /v1/tools/risk-classes` — List all risk classes with metadata
+
+### Legacy Policies (v1)
+
+#### `GET /v1/policies` — List rules, thresholds, budgets, rate limits
 #### `POST /v1/policies/rules` — Create a policy rule
-
-```json
-{
-  "org_id": "org_acme",
-  "tool_name": "stripe",
-  "tool_action": "refund",
-  "effect": "ALLOW",
-  "priority": 10,
-  "reason": "Allow refunds under standard workflow",
-  "agent_id": "agent_support_1"
-}
-```
-
-Wildcard matching is supported: `tool_name: "*"` matches all tools, `tool_action: "*"` matches all actions.
-
 #### `POST /v1/policies/thresholds` — Create an approval threshold
-
-```json
-{
-  "org_id": "org_acme",
-  "tool_name": "stripe",
-  "tool_action": "refund",
-  "amount_usd": 50.0
-}
-```
-
-Tool calls with `cost_estimate_usd > amount_usd` will require manual approval.
-
 #### `POST /v1/policies/budgets` — Create a budget limit
-
-```json
-{
-  "org_id": "org_acme",
-  "agent_id": "agent_support_1",
-  "daily_limit_usd": 100.0
-}
-```
-
-Omit `agent_id` for an org-wide budget. Agent-level budgets are evaluated independently.
-
 #### `POST /v1/policies/rate-limits` — Create a rate limit
-
-```json
-{
-  "org_id": "org_acme",
-  "agent_id": "agent_support_1",
-  "calls_per_minute": 30
-}
-```
-
-### Audit
-
-#### `POST /v1/audit/complete` — Record tool invocation outcome
-
-```json
-{
-  "request_id": "clxyz123",
-  "status": "SUCCESS",
-  "latency_ms": 245,
-  "output_summary": "Refund re_abc created"
-}
-```
-
-#### `GET /v1/audit/events` — Query audit trail
-
-**Query params:** `org_id`, `agent_id`, `tool_name`, `decision`, `limit`, `offset`
+#### `POST /v1/policies/simulate` — Simulate a policy evaluation
 
 ### Approvals
 
-#### `GET /v1/approvals` — List approval requests
+#### `GET /v1/approvals` — List approval requests (with agent names, risk class, evidence, actions)
+#### `POST /v1/approvals/:id/approve` — Approve with optional comment
+#### `POST /v1/approvals/:id/deny` — Deny with optional comment
+#### `POST /v1/approvals/:id/escalate` — Escalate a request
+#### `POST /v1/approvals/:id/comment` — Add a comment
 
-**Query params:** `org_id`, `status` (`PENDING` | `APPROVED` | `DENIED`)
+### Audit
 
-#### `POST /v1/approvals/decision` — Approve or deny a request
+#### `GET /v1/audit-log` — Query entity-level audit trail
 
-```json
-{
-  "approval_request_id": "clxyz456",
-  "decision": "APPROVED",
-  "decided_by": "admin@acme.com"
-}
-```
+**Query params:** `org_id`, `event_type`, `entity_type`, `entity_id`, `from`, `to`, `search`, `limit`, `offset`
 
-### Telemetry
+#### `GET /v1/audit/events` — Query governance decision audit trail
 
-#### `POST /v1/ingest/events` — Ingest a run with events
+### Webhooks
 
-```json
-{
-  "run": {
-    "run_id": "run_demo_1",
-    "org_id": "org_acme",
-    "agent_id": "agent_support_1",
-    "source": "OPENAI",
-    "provider": "openai",
-    "model": "gpt-4.1-mini",
-    "task_name": "ticket_triage",
-    "tags": ["support"]
-  },
-  "events": [
-    {
-      "event_id": "evt_1",
-      "run_id": "run_demo_1",
-      "org_id": "org_acme",
-      "agent_id": "agent_support_1",
-      "source": "OPENAI",
-      "type": "RUN_STARTED",
-      "status": "RUNNING"
-    },
-    {
-      "event_id": "evt_2",
-      "run_id": "run_demo_1",
-      "org_id": "org_acme",
-      "agent_id": "agent_support_1",
-      "source": "OPENAI",
-      "type": "MODEL_RESULT",
-      "status": "SUCCESS",
-      "input_tokens": 1200,
-      "output_tokens": 180,
-      "cost_usd": 0.012,
-      "latency_ms": 860
-    },
-    {
-      "event_id": "evt_3",
-      "run_id": "run_demo_1",
-      "org_id": "org_acme",
-      "agent_id": "agent_support_1",
-      "source": "OPENAI",
-      "type": "RUN_COMPLETED",
-      "status": "SUCCESS"
-    }
-  ],
-  "finalize": { "status": "SUCCESS" }
-}
-```
-
-**Response:**
-```json
-{
-  "run_id": "run_demo_1",
-  "accepted_events": 3,
-  "deduped_events": 0,
-  "run_status": "SUCCESS"
-}
-```
-
-Events with duplicate `event_id` values are automatically deduplicated.
-
-#### `GET /v1/runs` — List runs
-
-**Query params:** `org_id`, `agent_id`, `status`, `source`, `limit`, `offset`
-
-#### `GET /v1/runs/:runId` — Get run with events
-
-**Query params:** `org_id` (required)
-
-Returns the full run record with all associated events, ordered by timestamp.
-
-#### `POST /v1/runs/:runId/analyze` — Heuristic run analysis
-
-**Query params:** `org_id` (required)
-
-```json
-{
-  "question": "What should I optimize first?"
-}
-```
-
-Returns a rules-based analysis of the run (not LLM-backed in current version).
+#### `GET /v1/webhooks` — List webhooks
+#### `POST /v1/webhooks` — Create a webhook
+#### `PATCH /v1/webhooks/:id` — Update a webhook
+#### `POST /v1/webhooks/:id/test` — Send a test delivery
 
 ### Metrics
 
 #### `GET /v1/metrics/overview` — Dashboard KPIs
-
-**Query params:** `days` (default: 7)
-
-Returns: total tool calls, blocked percentage, pending approvals, total cost, 7-day calls/cost trajectory, decision breakdown.
-
+#### `GET /v1/metrics/risk-classes` — Evaluations by risk class
+#### `GET /v1/metrics/costs` — Cost breakdown (governed, blocked, run costs)
+#### `GET /v1/metrics/approvals` — Approval statistics
 #### `GET /v1/metrics/tenants` — Organization-level metrics
 #### `GET /v1/metrics/agents` — Agent list with metrics
-#### `GET /v1/metrics/agents/:agentId` — Single agent detail metrics
 #### `GET /v1/metrics/provider-breakdown` — Usage by provider
+
+### Telemetry
+
+#### `POST /v1/ingest/events` — Ingest a run with events
+#### `GET /v1/runs` — List runs
+#### `GET /v1/runs/:runId` — Get run with events
 
 ### Real-time
 
 #### `GET /v1/events/stream` — Server-Sent Events stream
 
-Streams live events for dashboard updates. Channels: `approvals`, `runs`, `events`.
-
 ## Console Features
 
 | Page | Path | Description |
 |------|------|-------------|
-| **Overview** | `/overview` | KPI cards (tool calls, blocked %, pending approvals, cost), 7-day trajectory charts, decision distribution |
-| **Run Explorer** | `/runs` | Filterable table of all runs with status badges, provider info, token/cost display |
-| **Run Detail** | `/runs/:runId` | Event timeline, top cost events, heuristic analysis panel, run metadata and tags |
-| **Live Timeline** | `/timeline` | Real-time SSE event stream with type filtering and tool call details |
-| **Approvals** | `/approvals` | Pending approval requests with tool/agent/cost context, approve/deny actions |
-| **Policy Studio** | `/policy-studio` | Create rules, thresholds, budgets, rate limits; simulate policy evaluations |
-| **Tenants** | `/tenants/:orgId` | Org-level metrics (spend, agent count, rule count), agent list |
-| **Agents** | `/agents/:agentId` | Agent KPIs, cost breakdown by tool, run count and status |
+| **Overview** | `/overview` | KPI cards, risk class distribution, cost metrics, 7-day trajectory, decision breakdown |
+| **Live Timeline** | `/timeline` | Real-time SSE event stream with type filtering |
+| **Approvals** | `/approvals` | Inbox with risk badges, agent names, approve/deny/escalate/comment, evidence, SLA countdown |
+| **Policy Studio** | `/policy-studio` | Versioned policy management (create/publish/rollback/diff), legacy rules/thresholds/budgets/rate limits, simulator |
+| **Run Explorer** | `/runs` | Filterable table of all runs with status, provider, cost display |
+| **Run Detail** | `/runs/:runId` | Event timeline, cost events, analysis panel |
+| **Tool Registry** | `/tools` | Register tools, auto-classify risk, risk class reference, search/filter |
+| **Audit Explorer** | `/audit` | Entity-level audit log with search, type filtering, expandable payloads |
+| **Agents** | `/agents` | Register agents with framework/environment/provider, view stats |
+| **Agent Detail** | `/agents/:agentId` | Agent KPIs, linked policies, allowed tools, recent runs |
+| **Tenants** | `/tenants` | Org-level metrics |
+| **Integrations** | `/integrations` | API keys and framework detection |
 
 ## Data Model
 
 ### Core Entities
 
 ```
-Organization ─┬── Agent
-              ├── PolicyRule          (ALLOW/DENY + priority + wildcard matching)
-              ├── ApprovalThreshold   (cost-based approval triggers)
-              ├── BudgetLimit         (daily spend caps, org or agent level)
-              ├── RateLimitPolicy     (calls per minute)
-              ├── AuditEvent          (governance decision records)
-              ├── ApprovalRequest     (PENDING → APPROVED/DENIED)
+Organization ─┬── Agent (framework, environment, provider)
+              ├── Tool (risk class, sensitivity)
+              ├── Policy ── PolicyVersion (definition, checksum, published)
+              ├── PolicyRule (ALLOW/DENY + priority + conditions + risk class)
+              ├── ApprovalThreshold (cost-based triggers)
+              ├── ApprovalPolicy (risk-class triggers, auto-expiry)
+              ├── BudgetLimit / Budget v2 (daily/weekly/monthly spend caps)
+              ├── RateLimitPolicy / RateLimit v2 (calls per window)
+              ├── AuditEvent (governance decision records)
+              ├── AuditLog (entity-level audit trail)
+              ├── Evaluation (enriched governance evaluation records)
+              ├── ApprovalRequest ── ApprovalAction (approve/deny/escalate/comment)
+              ├── Webhook (event-driven notifications)
               └── AgentRun ── AgentEvent (step-level telemetry)
 ```
-
-### Run Status Lifecycle
-
-| Status | Description |
-|--------|-------------|
-| `RUNNING` | Execution in progress |
-| `SUCCESS` | Completed successfully |
-| `ERROR` | Failed with error |
-| `CANCELED` | Cancelled by user |
-
-### Event Types
-
-| Type | Description |
-|------|-------------|
-| `RUN_STARTED` | Run initialization |
-| `MODEL_CALL` | LLM invocation (prompt sent) |
-| `MODEL_RESULT` | LLM response (tokens, cost, latency) |
-| `TOOL_CALL` | Tool invocation started |
-| `TOOL_RESULT` | Tool returned result |
-| `STEP` | Arbitrary step marker |
-| `RUN_COMPLETED` | Successful completion |
-| `RUN_FAILED` | Error completion |
-| `APPROVAL_REQUESTED` | Manual approval required |
-
-### Governance Decisions
-
-| Decision | Description |
-|----------|-------------|
-| `ALLOW` | Policy permits execution |
-| `DENY` | Policy blocks execution |
-| `REQUIRE_APPROVAL` | Manual approval needed before execution |
 
 ## Development
 
@@ -647,22 +582,10 @@ Organization ─┬── Agent
 | `make down` | Stop Docker containers |
 | `make logs` | Follow Docker container logs |
 
-### Root Scripts
-
-| Script | Description |
-|--------|-------------|
-| `pnpm dev` | Alias for `make dev` |
-| `pnpm build` | Build all packages and apps |
-| `pnpm test` | Run all test suites |
-| `pnpm lint` | Run linters across workspace |
-| `pnpm db:generate` | Generate Prisma client |
-| `pnpm db:migrate` | Run Prisma migrations |
-| `pnpm db:seed` | Run seed script |
-
 ### Testing
 
 ```bash
-# Policy engine unit tests
+# Policy engine unit tests (78 tests)
 pnpm --filter @governor/policy-engine test
 
 # API integration tests
@@ -681,86 +604,28 @@ pnpm build && pnpm test
 | `api` | Custom Dockerfile | 4000 | Fastify API service |
 | `console` | Custom Dockerfile | 3000 | Next.js frontend |
 
-## Verifying Your Setup
-
-### 1. Health check and metrics
-
-```bash
-curl http://localhost:4000/health
-curl "http://localhost:4000/v1/metrics/overview?days=7"
-```
-
-### 2. Explore runs
-
-```bash
-curl "http://localhost:4000/v1/runs?org_id=org_demo_1&limit=5"
-curl "http://localhost:4000/v1/runs/run_36?org_id=org_demo_1"
-curl -X POST "http://localhost:4000/v1/runs/run_36/analyze?org_id=org_demo_1" \
-  -H "content-type: application/json" \
-  -d '{"question":"What should I optimize first?"}'
-```
-
-### 3. Ingest a live run
-
-```bash
-curl -X POST "http://localhost:4000/v1/ingest/events" \
-  -H "content-type: application/json" \
-  -d '{
-    "run": {
-      "run_id": "run_live_demo_1",
-      "org_id": "org_demo_1",
-      "agent_id": "agent_support_1",
-      "source": "OPENAI",
-      "provider": "openai",
-      "model": "gpt-4.1-mini",
-      "task_name": "live_demo"
-    },
-    "events": [
-      { "event_id": "evt_live_1", "run_id": "run_live_demo_1", "org_id": "org_demo_1", "agent_id": "agent_support_1", "source": "OPENAI", "type": "RUN_STARTED", "status": "RUNNING" },
-      { "event_id": "evt_live_2", "run_id": "run_live_demo_1", "org_id": "org_demo_1", "agent_id": "agent_support_1", "source": "OPENAI", "type": "MODEL_RESULT", "status": "SUCCESS", "input_tokens": 1200, "output_tokens": 180, "cost_usd": 0.012, "latency_ms": 860 },
-      { "event_id": "evt_live_3", "run_id": "run_live_demo_1", "org_id": "org_demo_1", "agent_id": "agent_support_1", "source": "OPENAI", "type": "RUN_COMPLETED", "status": "SUCCESS" }
-    ],
-    "finalize": { "status": "SUCCESS" }
-  }'
-```
-
-Then visit http://localhost:3000/runs to inspect `run_live_demo_1`.
-
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| `REDIS_URL` missing or env parse errors | Ensure `.env` exists (`make ensure-env`) and start dev with `make dev` so defaults are injected |
-| Clerk key errors in local dev | Placeholder keys run local-mode UI. Use real Clerk keys in `.env` to enable full auth |
-| `EADDRINUSE` on port 3000/4000 | Stop previous processes on those ports, then rerun `make dev` |
-| Next.js stale cache issues | Stop dev server, remove `apps/console/.next`, restart `make dev` |
+| `REDIS_URL` missing or env parse errors | Ensure `.env` exists (`make ensure-env`) and start dev with `make dev` |
+| Clerk key errors in local dev | Placeholder keys run local-mode UI. Use real Clerk keys for full auth |
+| `EADDRINUSE` on port 3000/4000 | Stop previous processes, then rerun `make dev` |
+| Next.js stale cache issues | Stop dev server, remove `apps/console/.next`, restart |
 | Prisma client not generated | Run `make prisma-generate` or `pnpm db:generate` |
 | Database connection refused | Ensure Docker is running and `make infra` has completed |
 
-## Current Limitations
-
-- `POST /v1/runs/:runId/analyze` uses heuristic/rules-based analysis, not yet LLM-backed.
-- No materialized views for time-series rollups (uses direct query aggregation).
-- No webhooks or outbound connectors (Slack/PagerDuty/Jira).
-- Approval workflow is API-driven; enterprise escalations and SLA policies are not fully modeled.
-- Auth runs in local mode when Clerk keys are placeholders.
-
 ## Roadmap
 
-### Phase 2: Product Depth
-- Replace heuristic run analyzer with model-backed analyst copilot (RAG over run/event/policy data).
-- Add provider-native middleware examples for OpenAI, Anthropic, Gemini, LangChain callbacks.
-- Add policy versioning with draft/publish, rollback, and diff viewer.
-- Add incident surfacing and anomaly detection on spend/error-rate/latency drifts.
-
-### Phase 3: Enterprise Controls
-- SSO/SCIM + stronger Clerk org role mapping.
+### Next: Enterprise Depth
+- Model-backed analyst copilot (RAG over run/event/policy data) replacing heuristic run analyzer.
 - Signed decision attestations and tamper-evident audit chain.
+- SSO/SCIM + stronger Clerk org role mapping.
 - Data retention controls, PII tagging/redaction pipeline.
 - Multi-region deployment blueprint.
 
-### Phase 4: Platform Integrations
+### Future: Platform Integrations
 - Slack/PagerDuty/Jira connectors for approvals and incidents.
 - Data warehouse export (Snowflake/BigQuery) for FinOps and compliance.
-- Webhook subscriptions for `run.updated`, `event.ingested`, `approval.*` events.
 - Team-based saved views and alert subscriptions.
+- Provider-native middleware for OpenAI, Anthropic, Gemini, LangChain callbacks.

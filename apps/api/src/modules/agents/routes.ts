@@ -20,7 +20,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         _count: {
           select: {
             runs: true,
-            audits: true,
+            auditEvents: true,
             approvalRequests: { where: { status: "PENDING" } }
           }
         }
@@ -36,7 +36,9 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         name: a.name,
         description: a.description,
         status: a.status,
+        environment: a.environment,
         framework: a.framework,
+        provider: a.provider,
         tags: a.tags,
         allowedTools: a.allowedTools,
         metadata: a.metadata,
@@ -44,7 +46,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         updatedAt: a.updatedAt.toISOString(),
         stats: {
           total_runs: a._count.runs,
-          total_audit_events: a._count.audits,
+          total_audit_events: a._count.auditEvents,
           pending_approvals: a._count.approvalRequests
         }
       }))
@@ -65,7 +67,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         _count: {
           select: {
             runs: true,
-            audits: true,
+            auditEvents: true,
             approvalRequests: { where: { status: "PENDING" } }
           }
         }
@@ -124,7 +126,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         updatedAt: agent.updatedAt.toISOString(),
         stats: {
           total_runs: agent._count.runs,
-          total_audit_events: agent._count.audits,
+          total_audit_events: agent._count.auditEvents,
           pending_approvals: agent._count.approvalRequests
         }
       },
@@ -165,10 +167,23 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         name: payload.name,
         description: payload.description,
         status: payload.status,
+        environment: payload.environment,
         framework: payload.framework,
+        provider: payload.provider,
         tags: payload.tags ?? [],
-        allowedTools: payload.allowed_tools ?? [],
-        metadata: payload.metadata ?? {}
+        allowedTools: (payload.allowed_tools ?? []) as any,
+        metadata: (payload.metadata ?? {}) as any
+      }
+    });
+
+    await app.prisma.auditLog.create({
+      data: {
+        orgId: payload.org_id,
+        actorType: "SYSTEM",
+        eventType: "agent.created",
+        entityType: "Agent",
+        entityId: agent.id,
+        summary: `Created agent "${payload.name}" (${payload.id})`
       }
     });
 
@@ -198,9 +213,12 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         ...(payload.name !== undefined ? { name: payload.name } : {}),
         ...(payload.description !== undefined ? { description: payload.description } : {}),
         ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.environment !== undefined ? { environment: payload.environment } : {}),
+        ...(payload.framework !== undefined ? { framework: payload.framework } : {}),
+        ...(payload.provider !== undefined ? { provider: payload.provider } : {}),
         ...(payload.tags !== undefined ? { tags: payload.tags ?? [] } : {}),
-        ...(payload.allowed_tools !== undefined ? { allowedTools: payload.allowed_tools ?? [] } : {}),
-        ...(payload.metadata !== undefined ? { metadata: payload.metadata ?? {} } : {})
+        ...(payload.allowed_tools !== undefined ? { allowedTools: (payload.allowed_tools ?? []) as any } : {}),
+        ...(payload.metadata !== undefined ? { metadata: (payload.metadata ?? {}) as any } : {})
       }
     });
 
