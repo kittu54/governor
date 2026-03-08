@@ -1,8 +1,18 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { getSupabasePublicConfig } from "./runtime-config";
+
+let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
 export function getSupabaseBrowserClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  if (browserClient) {
+    return browserClient;
+  }
+
+  const config = getSupabasePublicConfig("client");
+  if (!config) {
+    throw new Error("Supabase public configuration is missing or invalid.");
+  }
+
+  browserClient = createBrowserClient(config.url, config.anonKey);
+  return browserClient;
 }
