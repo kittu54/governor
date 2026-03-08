@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getApiBaseUrl } from "@/lib/runtime-config";
-
 export const runtime = "nodejs";
+
+const API_BASE_URL = (() => {
+  const explicit = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  if (explicit) return explicit;
+  if (process.env.NODE_ENV === "production") return "https://agentgovernor.vercel.app";
+  return "http://localhost:4000";
+})();
 
 type RouteParams = { params: Promise<{ path: string[] }> };
 
 function buildTargetUrl(path: string[], request: NextRequest): string {
   const url = new URL(request.url);
   const query = url.search;
-  const apiBaseUrl = getApiBaseUrl("server");
-  return `${apiBaseUrl}/v1/${path.join("/")}${query}`;
+  return `${API_BASE_URL}/v1/${path.join("/")}${query}`;
 }
 
 function forwardHeaders(request: NextRequest): Record<string, string> {

@@ -1,7 +1,11 @@
 import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
-import { getApiBaseUrl } from "./runtime-config";
 
-export const API_BASE_URL = getApiBaseUrl("server");
+export const API_BASE_URL = (() => {
+  const explicit = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  if (explicit) return explicit;
+  if (process.env.NODE_ENV === "production") return "https://agentgovernor.vercel.app";
+  return "http://localhost:4000";
+})();
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   if (isClerkEnabled) {

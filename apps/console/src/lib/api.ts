@@ -1,6 +1,9 @@
-import { getApiBaseUrl, getSupabasePublicConfig } from "./runtime-config";
-
-export const API_BASE_URL = getApiBaseUrl("client");
+export const API_BASE_URL = (() => {
+  const explicit = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  if (explicit) return explicit;
+  if (process.env.NODE_ENV === "production") return "https://agentgovernor.vercel.app";
+  return "http://localhost:4000";
+})();
 
 /**
  * Get auth headers for client-side API calls.
@@ -8,9 +11,11 @@ export const API_BASE_URL = getApiBaseUrl("client");
  * Clerk sessions are handled via cookies automatically.
  */
 export async function getClientAuthHeaders(): Promise<Record<string, string>> {
-  const supabaseConfig = getSupabasePublicConfig("client");
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const supabaseEnabled = supabaseUrl.length > 0 && supabaseKey.length > 0 && supabaseUrl.startsWith("http");
 
-  if (supabaseConfig) {
+  if (supabaseEnabled) {
     try {
       const { getSupabaseBrowserClient } = await import("./supabase-browser");
       const supabase = getSupabaseBrowserClient();
