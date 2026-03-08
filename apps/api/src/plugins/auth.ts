@@ -145,7 +145,7 @@ const authPluginImpl: FastifyPluginAsync = async (app) => {
         try {
           const payload = verifySupabaseJwt(token, app.config.SUPABASE_JWT_SECRET);
           if (payload) {
-            const userId = payload.sub;
+            const userId = payload.sub as string | undefined;
             const email = payload.email as string | undefined;
             const appMeta = (payload.app_metadata ?? {}) as Record<string, unknown>;
             const orgId = (appMeta.org_id ?? appMeta.organization_id) as string | undefined;
