@@ -79,7 +79,16 @@ export async function buildApp(overrides?: Partial<AppDependencies>) {
     });
   });
 
+  app.get("/", async () => ({
+    name: "Governor API",
+    version: "1.0.0",
+    status: "ok",
+    health: "/health",
+    api: "/v1",
+  }));
+
   app.get("/health", async () => ({ ok: true, timestamp: new Date().toISOString() }));
+
 
   app.get("/ready", async (_request, reply) => {
     const checks: Record<string, boolean> = {};
