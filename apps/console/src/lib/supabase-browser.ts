@@ -1,37 +1,15 @@
-export interface SupabaseBrowserClient {
-  auth: {
-    getSession: () => Promise<{ data: { session: { access_token?: string } | null } }>;
-    getUser: () => Promise<{ data: { user: { email?: string | null } | null } }>;
-    signInWithPassword: (credentials: { email: string; password: string }) => Promise<{ error: { message: string } | null }>;
-    signUp: (credentials: { email: string; password: string }) => Promise<{ error: { message: string } | null }>;
-    signOut: () => Promise<void>;
-  };
-}
+import { createBrowserClient } from "@supabase/ssr";
 
-function unsupported(): { message: string } {
-  return { message: "Supabase client is unavailable in this deployment. Configure Clerk auth instead." };
-}
+export type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>;
 
-const unsupportedClient: SupabaseBrowserClient = {
-  auth: {
-    async getSession() {
-      return { data: { session: null } };
-    },
-    async getUser() {
-      return { data: { user: null } };
-    },
-    async signInWithPassword() {
-      return { error: unsupported() };
-    },
-    async signUp() {
-      return { error: unsupported() };
-    },
-    async signOut() {
-      return;
-    },
-  },
-};
+let client: SupabaseBrowserClient | null = null;
 
 export function getSupabaseBrowserClient(): SupabaseBrowserClient {
-  return unsupportedClient;
+  if (client) return client;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  client = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return client;
 }
