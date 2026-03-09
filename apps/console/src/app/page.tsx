@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  redirect("/overview");
+  // No marketing page — send users straight to sign-in.
+  // Authenticated users will be caught by middleware and sent to /overview.
+  redirect("/sign-in");
 }
