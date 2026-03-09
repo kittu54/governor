@@ -1,37 +1,45 @@
-export interface SupabaseBrowserClient {
-  auth: {
-    getSession: () => Promise<{ data: { session: { access_token?: string } | null } }>;
-    getUser: () => Promise<{ data: { user: { email?: string | null } | null } }>;
-    signInWithPassword: (credentials: { email: string; password: string }) => Promise<{ error: { message: string } | null }>;
-    signUp: (credentials: { email: string; password: string }) => Promise<{ error: { message: string } | null }>;
-    signOut: () => Promise<void>;
-  };
-}
+import { createBrowserClient } from "@supabase/ssr";
 
-function unsupported(): { message: string } {
-  return { message: "Supabase client is unavailable in this deployment. Configure Clerk auth instead." };
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-const unsupportedClient: SupabaseBrowserClient = {
-  auth: {
-    async getSession() {
-      return { data: { session: null } };
-    },
-    async getUser() {
-      return { data: { user: null } };
-    },
-    async signInWithPassword() {
-      return { error: unsupported() };
-    },
-    async signUp() {
-      return { error: unsupported() };
-    },
-    async signOut() {
-      return;
-    },
-  },
-};
+const hasSupabaseConfig = supabaseUrl.length > 0 && supabaseKey.length > 0 && supabaseUrl.startsWith("http");
 
-export function getSupabaseBrowserClient(): SupabaseBrowserClient {
-  return unsupportedClient;
+let _client: ReturnType<typeof createBrowserClient> | null = null;
+
+/**
+ * Returns a real Supabase browser client when env vars are set,
+ * or a stub that returns friendly error messages when not configured.
+ */
+export function getSupabaseBrowserClient() {
+  if (hasSupabaseConfig) {
+    if (!_client) {
+      _client = createBrowserClient(supabaseUrl, supabaseKey);
+    }
+    return _client;
+  }
+
+  // Fallback stub when Supabase is not configured
+  return {
+    auth: {
+      async getSession() {
+        return { data: { session: null }, error: null };
+      },
+      async getUser() {
+        return { data: { user: null }, error: null };
+      },
+      async signInWithPassword() {
+        return { data: { user: null, session: null }, error: { message: "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.", name: "AuthError", status: 500 } };
+      },
+      async signUp() {
+        return { data: { user: null, session: null }, error: { message: "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.", name: "AuthError", status: 500 } };
+      },
+      async signOut() {
+        return { error: null };
+      },
+      onAuthStateChange() {
+        return { data: { subscription: { unsubscribe() { } } } };
+      },
+    },
+  } as unknown as ReturnType<typeof createBrowserClient>;
 }
