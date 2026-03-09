@@ -1,0 +1,7 @@
+{
+    "installCommand": "corepack enable && pnpm install --frozen-lockfile",
+    "buildCommand": "pnpm --filter @governor/console build",
+    "outputDirectory": "apps/console/.next",
+    "framework": "nextjs",
+    "rootDirectory": ""
+}

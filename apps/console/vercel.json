@@ -1,0 +1,6 @@
+{
+    "installCommand": "cd ../.. && corepack pnpm install --filter @governor/console --filter @governor/sdk",
+    "buildCommand": "cd ../.. && corepack pnpm --filter @governor/console build",
+    "outputDirectory": ".next",
+    "framework": "nextjs"
+}
