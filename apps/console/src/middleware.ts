@@ -10,6 +10,8 @@ const hasSupabase = supabaseUrl.length > 0 && supabaseKey.length > 0;
 const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/api/proxy"];
 
 function isPublicPath(pathname: string): boolean {
+  // Exact match for root (landing page)
+  if (pathname === "/") return true;
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
