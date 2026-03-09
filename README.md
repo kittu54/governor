@@ -4,7 +4,7 @@ Governor is an AI Governance Control Tower for tool-using AI agents. It sits bet
 
 It works with agents built on **any framework** — LangChain, CrewAI, AutoGen, n8n, Zapier, MindStudio, Vertex AI, Copilot Studio, or custom SDKs — and provides a unified governance, approval, and audit layer.
 
-## What Governor Does
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ It works with agents built on **any framework** — LangChain, CrewAI, AutoGen, 
 │                                                                    │
 │  ┌─────────────────────┐   ┌──────────────────────────────────┐   │
 │  │   PostgreSQL 16     │   │          Redis 7                 │   │
-│  │                     │   │                                  │   │
+│  │   (Supabase)        │   │                                  │   │
 │  │  Evaluations        │   │  Rate limit counters             │   │
 │  │  Audit logs         │   │  SSE pub/sub                    │   │
 │  │  Policy versions    │   │  Budget spend cache             │   │
@@ -54,13 +54,78 @@ It works with agents built on **any framework** — LangChain, CrewAI, AutoGen, 
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start — Protect Your Agent in 60 Seconds
+---
+
+## Current Status
+
+> **Live deployment (March 2026):** API and Console are deployed on Vercel with Supabase for authentication and database.
+
+### ✅ What Works
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **API (Fastify)** | ✅ Deployed | Running on Vercel Serverless Functions, all 22 API modules active |
+| **Console (Next.js)** | ✅ Deployed | Running on Vercel, all pages render |
+| **Authentication** | ✅ Working | Supabase Auth (email/password sign-up and sign-in) |
+| **Auth Guard** | ✅ Working | Middleware redirects unauthenticated users to /sign-in |
+| **Database** | ✅ Connected | Supabase PostgreSQL via Prisma ORM |
+| **Policy Engine** | ✅ Working | Pure TypeScript, conditions DSL, compile, explain, diff |
+| **SDK** | ✅ Published | `@governor/sdk` with `protectAgent()`, `wrapTool()`, adapters |
+| **CLI** | ✅ Published | `@governor/cli` with init, inspect, simulate, actions |
+| **API Root & Health** | ✅ Working | `GET /` returns server info, `GET /health` returns OK |
+| **Risk Classification** | ✅ Working | Semantic taxonomy with auto-classify heuristics |
+
+### ⚠️ Known Issues / In Progress
+
+| Issue | Details |
+|-------|---------|
+| **Console pages show empty state** | Some dashboard pages (Overview, Agents, Tools, etc.) show empty data because the database hasn't been seeded with demo data on production yet. The API endpoints behind them work correctly. |
+| **Redis not connected on Vercel** | Rate limiting, SSE streaming, and budget caching require Redis. These features degrade gracefully (the API still works) but real-time timeline and rate limits won't function without a Redis instance. |
+| **Navigation after sign-up** | After creating an account and signing in, the org is auto-provisioned from the Supabase user ID. If the first page shows "Generate API Key," this is the quickstart flow working as intended — the user needs to create API keys to start using Governor. |
+| **`CORS_ORIGIN` configuration** | Must be set on the API Vercel project to match the Console URL, otherwise browser requests from the console to the API will be blocked. |
+
+### ❌ Not Yet Implemented
+
+| Feature | Notes |
+|---------|-------|
+| **Marketing / landing page** | Root URL (`/`) redirects directly to `/sign-in`. No public-facing marketing page exists yet. |
+| **Email verification flow** | Supabase sends confirmation emails on sign-up, but the redirect URL may need configuration in Supabase Dashboard. |
+| **Password reset** | No "Forgot Password" flow implemented in the console UI yet. |
+| **Organization management UI** | Orgs are auto-provisioned from user ID. No UI for creating/switching orgs. |
+| **Billing integration** | Billing page exists in the UI but has no real payment processing. |
+| **Webhook delivery** | Webhook endpoints exist in the API but outbound delivery is not wired to a job runner. |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **API** | Node.js 22, Fastify 5, TypeScript 5.9 |
+| **Database** | PostgreSQL 16 (Supabase), Prisma 6 ORM |
+| **Cache / Pub-Sub** | Redis 7 (optional — degrades gracefully) |
+| **Frontend** | Next.js 15.2.6 (App Router), CSS, Recharts |
+| **Auth** | Supabase Auth (email/password) via `@supabase/ssr` |
+| **Deployment** | Vercel (Serverless Functions for API, Edge for Console) |
+| **Monorepo** | pnpm 9 workspaces + Turborepo |
+| **Build** | tsup (API), Next.js (Console) |
+
+---
+
+## Quick Start — Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+- Docker + Docker Compose (for local Postgres + Redis)
 
 ### 1. Install and Start
 
 ```bash
 git clone https://github.com/kittu54/governor
 cd governor
+cp .env.example .env
 make bootstrap    # installs deps, starts Postgres + Redis, runs migrations
 make dev          # starts API on :4000 and Console on :3000
 ```
@@ -90,13 +155,61 @@ await agent.call("database.query", { sql: "SELECT * FROM users" });
 
 ### 3. Review Actions
 
-Open the Console at **http://localhost:3000/actions** to see every governed action.
+Open the Console at **http://localhost:3000** to see every governed action.
 
 No policies needed. No configuration required. The AI Action Firewall protects your agents immediately.
 
+---
+
+## Deployment (Vercel + Supabase)
+
+Both the API and Console are deployed as separate Vercel projects from the same GitHub monorepo.
+
+### Vercel Project Setup
+
+| Vercel Project | Root Directory | Framework |
+|----------------|---------------|-----------|
+| `governor-api` | `apps/api` | Other (Fastify) |
+| `console` | `apps/console` | Next.js |
+
+Each project has a `vercel.json` that specifies pnpm build commands for the monorepo.
+
+### Required Environment Variables
+
+#### API Project (`governor-api`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Supabase PostgreSQL connection string |
+| `SUPABASE_JWT_SECRET` | Yes | Supabase Dashboard → Project Settings → API → JWT Secret |
+| `CORS_ORIGIN` | Yes | Console URL (e.g. `https://console-xxx.vercel.app`) |
+| `REDIS_URL` | No | Redis connection string (rate limits, SSE, budget cache) |
+| `NODE_ENV` | No | `production` (auto-set by Vercel) |
+
+#### Console Project (`console`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase Dashboard → Project Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase Dashboard → Project Settings → API → `anon` key |
+| `NEXT_PUBLIC_API_BASE_URL` | No | API URL (defaults to `https://agentgovernor.vercel.app` in prod) |
+
+#### SDK / Agent Configuration
+
+| Variable | Description |
+|----------|-------------|
+| `GOVERNOR_API_BASE_URL` | API URL for SDK clients (default: `http://localhost:4000`) |
+| `GOVERNOR_API_KEY` | API authentication key |
+| `GOVERNOR_ORG_ID` | Organization ID for SDK context |
+| `GOVERNOR_AGENT_ID` | Agent ID for SDK context |
+| `GOVERNOR_ENVIRONMENT` | Enforcement mode (`DEV`, `STAGING`, `PROD`) |
+| `GOVERNOR_ON_ERROR` | Behavior if Governor is unreachable (`throw`, `allow`, `deny`) |
+
+---
+
 ## AI Action Firewall
 
-Governor includes a zero-configuration protection layer that activates automatically. When you install Governor, your agents are immediately protected:
+Governor includes a zero-configuration protection layer that activates automatically:
 
 | Risk Class | Default Action | Examples |
 |------------|---------------|---------|
@@ -113,278 +226,108 @@ Governor includes a zero-configuration protection layer that activates automatic
 
 Override any rule by adding your own policies in Policy Studio.
 
-## Governor CLI
-
-```bash
-npx @governor/cli init my-org my-agent    # Initialize project
-npx @governor/cli status                   # Check firewall status
-npx @governor/cli actions                  # List recent actions
-npx @governor/cli inspect stripe.refund    # Classify a tool
-npx @governor/cli simulate stripe.refund 500  # Simulate evaluation
-npx @governor/cli rules                    # Show firewall rules
-```
-
-**Core capabilities:**
-
-- **AI Action Firewall** — zero-config protection with safe defaults. Automatically blocks dangerous tools and requires approval for risky operations.
-- **protectAgent() SDK** — protect an agent with a single function call. Wraps all tools, classifies risk, installs firewall, and logs everything.
-- **Action Explorer** — see every governed tool invocation with risk classification, policy decision, approval status, and evaluation trace.
-- **Governance Gateway SDK** — wraps tool calls and enforces policy decisions before execution, with retry logic and configurable fallback.
-- **Policy Engine** — evaluates rules using a conditions DSL, semantic risk classification, enforcement modes (DEV/STAGING/PROD), budget checks, rate limits, and approval requirements.
-- **Policy Versioning** — create, version, compile, publish, and roll back policy sets with full diff and audit trail.
-- **Risk Classification** — semantic taxonomy (MONEY_MOVEMENT, CODE_EXECUTION, PII_ACCESS, etc.) with auto-classification heuristics and admin overrides.
-- **Tool Registry** — centralized catalog of tools with risk class assignments, sensitivity flags, and auto-classify.
-- **Approval Workflows** — operator-centric inbox with approve/deny/escalate/comment, evidence capture, expiry, and SLA tracking.
-- **Full Audit Trail** — immutable entity-level audit log alongside governance decision records and evaluation traces.
-- **MCP Governance** — register MCP servers, auto-discover tools, classify risk, and enforce policies across MCP tool calls.
-- **Policy Simulation** — simulate policy changes against single evaluations or historical runs to preview impact before deploying.
-- **Advanced Approval Workflows** — multi-level approval chains with per-level timeouts, auto-escalation, auto-deny on expiry, and bulk actions.
-- **Operator Analytics** — governance metrics: blocked actions, approval rates, spend prevented, top risky tools, risk distribution, and daily trends.
-- **Audit Integrity** — optional hash chaining for audit events with cryptographic verification endpoint.
-- **Webhooks** — event-driven notifications for external integrations.
-- **Telemetry Ingestion** — captures run-level and event-level data from any AI provider.
-- **Visual Console** — dashboards for operations, approvals, policy authoring, tool registry, MCP servers, and analytics.
-
-## How Policy Evaluation Works
-
-When an agent invokes a tool through the Governor SDK, the policy engine evaluates the call through a priority-ordered pipeline:
-
-```
-Tool call arrives
-       │
-       ▼
-┌──────────────────┐
-│ Risk Classify    │ Determine risk class (registry → heuristics → default)
-└──────┬───────────┘
-       ▼
-┌──────────────────┐     Sensitive action in PROD with no explicit ALLOW?
-│ Environment +    │────── YES ──▶ DENY (safe-by-default in PROD)
-│ Sensitivity Check│
-└──────┬───────────┘
-       │ NO
-       ▼
-┌──────────────────┐     Budget exceeded?
-│ Budget Check     │────── YES ──▶ DENY (org or agent daily limit exceeded)
-└──────┬───────────┘
-       │ NO
-       ▼
-┌──────────────────┐     Calls ≥ limit?
-│ Rate Limit       │────── YES ──▶ DENY (rate limit exceeded)
-└──────┬───────────┘
-       │ NO
-       ▼
-┌──────────────────┐     Matching DENY rule (with conditions)?
-│ Explicit DENY    │────── YES ──▶ DENY (blocked by rule)
-│ Rules            │
-└──────┬───────────┘
-       │ NO
-       ▼
-┌──────────────────┐     Approval required by risk class or threshold?
-│ Approval Check   │────── YES ──▶ REQUIRE_APPROVAL
-│                  │
-└──────┬───────────┘
-       │ NO
-       ▼
-┌──────────────────┐     Matching ALLOW rule?
-│ Allow Rules      │────── YES ──▶ ALLOW (explicit rule)
-└──────┬───────────┘
-       │ NO
-       ▼
-   DEFAULT (mode-dependent: ALLOW in DEV/STAGING, DENY sensitive in PROD)
-```
-
-Every evaluation returns a **decision trace** — an array of `DecisionTraceItem` objects showing each step the engine considered, and the `explain()` utility converts traces to human-readable text.
-
-## Risk Classes
-
-Governor uses a semantic risk taxonomy to classify tool actions:
-
-| Risk Class | Severity | Examples |
-|------------|----------|----------|
-| `MONEY_MOVEMENT` | Critical (95) | `stripe.refund`, `paypal.transfer` |
-| `CODE_EXECUTION` | Critical (90) | `shell.exec`, `docker.run` |
-| `ADMIN_ACTION` | Critical (90) | `iam.grant`, `k8s.deploy` |
-| `CREDENTIAL_USE` | Critical (85) | `vault.read`, `aws.assume_role` |
-| `EXTERNAL_COMMUNICATION` | High (80) | `gmail.send`, `twilio.sms` |
-| `DATA_EXPORT` | High (75) | `s3.export`, `bigquery.export` |
-| `PII_ACCESS` | High (85) | `customer.lookup`, `user.get_pii` |
-| `DATA_WRITE` | Medium (60) | `postgres.update`, `mongo.insert` |
-| `FILE_MUTATION` | Medium (75) | `fs.delete`, `s3.delete` |
-| `LOW_RISK` | Low (10) | `http.GET`, `cache.read` |
-
-Tools are classified by: (1) registered overrides in the tool registry, (2) default keyword-based heuristics, or (3) fallback to `LOW_RISK`.
+---
 
 ## Monorepo Structure
 
 ```
 governor/
 ├── apps/
-│   ├── api/              Fastify API service — governance, audit, tools, metrics, webhooks, MCP, simulation
-│   │   ├── src/modules/  Feature modules (policy, tools, approvals, audit, metrics, mcp, simulation,
-│   │   │                 firewall, actions, alerts)
-│   │   ├── prisma/       Database schema, migrations, and seed data
-│   │   └── test/         Integration tests
+│   ├── api/              Fastify API — 22 feature modules
+│   │   ├── src/modules/  actions, agents, alerts, apikeys, approvals, audit,
+│   │   │                 auditlog, billing, events, firewall, gateway, ingest,
+│   │   │                 mcp, me, metrics, onboarding, policies, policy,
+│   │   │                 runs, simulation, tools, webhooks
+│   │   ├── prisma/       Database schema + migrations
+│   │   └── vercel.json   Vercel deployment config
 │   │
 │   └── console/          Next.js 15 visual control tower
-│       ├── src/app/      App Router pages (actions, overview, runs, approvals, policy-studio, tools,
-│       │                 mcp, audit, alerts, etc.)
-│       └── src/components/ UI components (layout, actions, alerts, charts, policy, tools, mcp, approvals)
+│       ├── src/app/      App Router pages
+│       ├── src/lib/      Supabase clients, API helpers, auth
+│       └── vercel.json   Vercel deployment config
 │
 ├── packages/
-│   ├── sdk/              Integration SDK — protectAgent, wrapTool, telemetry, provider adapters
-│   ├── cli/              Governor CLI — init, inspect, simulate, actions, rules
-│   ├── policy-engine/    Pure TypeScript policy evaluation, conditions DSL, compile, explain, diff
-│   └── shared/           Shared types, Zod schemas, risk taxonomy, firewall defaults, and contracts
+│   ├── sdk/              @governor/sdk — protectAgent, wrapTool, adapters
+│   ├── cli/              @governor/cli — init, inspect, simulate, rules
+│   ├── policy-engine/    Pure TS policy evaluation, conditions DSL, compile
+│   └── shared/           Shared types, Zod schemas, risk taxonomy, contracts
 │
-├── examples/
-│   ├── quickstart/       Protect an agent in 3 lines with protectAgent()
-│   ├── openai-agent/     OpenAI function-calling tools with Governor governance
-│   ├── langchain-agent/  LangChain tools with wrapLangChainTool
-│   ├── mcp-server/       MCP server dispatch with evaluate()
-│   └── internal-tool/    Internal pipeline with telemetry runs
-│
-├── docker-compose.yml    Postgres + Redis + API + Console containers
+├── examples/             Integration examples (OpenAI, LangChain, MCP, internal)
+├── docker-compose.yml    Postgres + Redis (local dev)
 ├── Makefile              Bootstrap and dev lifecycle commands
 └── turbo.json            Turborepo build orchestration
 ```
 
-## Tech Stack
+---
 
-| Layer | Technology |
-|-------|-----------|
-| **API** | Node.js 20+, Fastify 5, TypeScript |
-| **Database** | PostgreSQL 16, Prisma 6 ORM |
-| **Cache / Pub-Sub** | Redis 7 |
-| **Frontend** | Next.js 15 (App Router), Tailwind CSS, Recharts |
-| **Auth** | Clerk (with local-mode fallback for dev) |
-| **Monorepo** | pnpm 9 workspaces + Turborepo |
-| **Infra** | Docker Compose |
+## Console Pages
 
-## Prerequisites
+| Page | Path | Status | Description |
+|------|------|--------|-------------|
+| **Sign In** | `/sign-in` | ✅ Working | Supabase email/password authentication |
+| **Sign Up** | `/sign-up` | ✅ Working | Account creation with email confirmation |
+| **Overview** | `/overview` | ✅ Renders | KPI cards, risk distribution, cost metrics, 7-day trajectory |
+| **Actions** | `/actions` | ✅ Renders | Governed tool invocations with risk classification |
+| **Approvals** | `/approvals` | ✅ Renders | Inbox with approve/deny/escalate/comment |
+| **Policy Studio** | `/policy-studio` | ✅ Renders | Versioned policy management, simulator |
+| **Tool Registry** | `/tools` | ✅ Renders | Register tools, auto-classify risk |
+| **MCP Servers** | `/mcp` | ✅ Renders | MCP server registry, tool discovery |
+| **Audit Explorer** | `/audit` | ✅ Renders | Entity-level audit log with search |
+| **Agents** | `/agents` | ✅ Renders | Agent registry with framework/environment |
+| **Agent Detail** | `/agents/:id` | ✅ Renders | Agent KPIs, linked policies, recent runs |
+| **Run Explorer** | `/runs` | ✅ Renders | Filterable run table with status/provider/cost |
+| **Run Detail** | `/runs/:id` | ✅ Renders | Event timeline, cost analysis |
+| **Live Timeline** | `/timeline` | ⚠️ Needs Redis | Real-time SSE event stream |
+| **Alerts** | `/alerts` | ✅ Renders | Alert rules and notification management |
+| **Integrations** | `/integrations` | ✅ Renders | API keys and framework detection |
+| **Settings** | `/settings` | ✅ Renders | General, profile, billing, API keys tabs |
+| **Billing** | `/billing` | ⚠️ UI Only | No real payment processing |
+| **Docs** | `/docs` | ✅ Working | Inline API documentation |
+| **Quickstart** | `/quickstart` | ✅ Working | Onboarding flow for new users |
 
-- Node.js 20+
-- pnpm 9+
-- Docker + Docker Compose
-- Colima or Docker Desktop running
-
-## Quickstart
-
-```bash
-cp .env.example .env
-make bootstrap
-make dev
-```
-
-Then open:
-- **Console:** http://localhost:3000
-- **API:** http://localhost:4000
-- **Health check:** http://localhost:4000/health
-
-### What `make bootstrap` Does
-
-1. Ensures `.env` exists (copies from `.env.example` if missing).
-2. Installs workspace dependencies with frozen lockfile.
-3. Starts Postgres + Redis containers via Docker Compose.
-4. Waits for Postgres readiness and creates the `governor` database.
-5. Generates Prisma client, runs migrations, and seeds demo data.
-6. Runs policy-engine unit tests and API integration tests.
-
-### Demo Seed Data
-
-The seed script populates realistic data for immediate exploration:
-
-| Entity | Count | Details |
-|--------|-------|---------|
-| Organizations | 3 | Multi-tenant demo orgs |
-| Agents | 5 | Support, Finance, Ops, Data, Dev agents |
-| Tools | 14 | Across all risk classes (stripe, gmail, shell, vault, etc.) |
-| Policy Packs | 3 | Customer Support, Finance Ops, Development Sandbox |
-| Approval Policies | 3 | Money Movement, Data Export, Admin Action |
-| Audit events | 2,000 | Governance decision records |
-| Audit log entries | 8 | Entity-level audit trail |
-| Pending approvals | 20 | Awaiting action |
-| Runs | 450 | Across OpenAI / Anthropic / Gemini / LangChain |
-| Run events | Thousands | Token, cost, latency, and tool metadata |
-
-## Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NODE_ENV` | No | `development` | Runtime environment |
-| **API** | | | |
-| `API_PORT` | No | `4000` | API server port |
-| `API_HOST` | No | `0.0.0.0` | API server bind address |
-| `API_BASE_URL` | No | `http://localhost:4000` | Public API URL |
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `REDIS_URL` | Yes | — | Redis connection string |
-| `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed CORS origins |
-| `CLERK_SECRET_KEY` | No | — | Clerk backend key (placeholder = local mode) |
-| `CLERK_PUBLISHABLE_KEY` | No | — | Clerk frontend key (placeholder = local mode) |
-| **Console** | | | |
-| `NEXT_PUBLIC_API_BASE_URL` | Yes | — | API URL for browser requests |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | No | — | Clerk frontend key |
-| **SDK** | | | |
-| `GOVERNOR_API_BASE_URL` | No | `http://localhost:4000` | API URL for SDK clients |
-| `GOVERNOR_API_KEY` | No | — | API authentication key |
-| `GOVERNOR_ORG_ID` | Yes | — | Organization ID for SDK context |
-| `GOVERNOR_AGENT_ID` | Yes | — | Agent ID for SDK context |
-| `GOVERNOR_USER_ID` | No | — | User ID for SDK context |
-| `GOVERNOR_SESSION_ID` | No | — | Session ID for SDK context |
-| `GOVERNOR_ENVIRONMENT` | No | — | Enforcement mode (DEV, STAGING, PROD) |
-| `GOVERNOR_ON_ERROR` | No | `throw` | Behavior if Governor is unreachable (throw, allow, deny) |
+---
 
 ## SDK Usage
 
 ### Installation
 
-The SDK is a workspace package (`@governor/sdk`). In external projects, point to the API:
-
 ```ts
 import { createGovernor, createGovernorFromEnv } from "@governor/sdk";
 
-// Option 1: Explicit configuration
+// Explicit configuration
 const gov = createGovernor({
-  api_base_url: "https://your-governor.example.com",
+  api_base_url: "https://your-governor-api.vercel.app",
   org_id: "org_acme",
   agent_id: "agent_support_1",
   api_key: "your-api-key",
   environment: "PROD",
   on_error: "deny",
-  max_retries: 3,
-  timeout_ms: 5000,
 });
 
-// Option 2: From environment variables
+// Or from environment variables
 const gov = createGovernorFromEnv();
 ```
 
-### Governance Gateway — Wrapping Tools
-
-The `wrapTool` function creates a governed version of any tool. Every call is evaluated against policies before execution, and the result is recorded in the audit trail:
+### Governance Gateway
 
 ```ts
 const refund = gov.wrapTool({
   tool_name: "stripe",
   tool_action: "refund",
   handler: async (payload: { amount_usd: number; charge_id: string }) => {
-    return await stripe.refunds.create({ charge: payload.charge_id, amount: payload.amount_usd * 100 });
+    return await stripe.refunds.create({
+      charge: payload.charge_id,
+      amount: payload.amount_usd * 100,
+    });
   },
   costEstimator: (payload) => payload.amount_usd * 0.0002,
-  inputSummarizer: (payload) => `refund $${payload.amount_usd} on ${payload.charge_id}`,
-  outputSummarizer: (result) => `refund ${result.id} created`
 });
 
-// This call will:
-//   1. Classify risk (MONEY_MOVEMENT for stripe.refund)
-//   2. Check enforcement mode (DEV=audit, STAGING=warn, PROD=enforce)
-//   3. Evaluate policies (budgets, rate limits, rules with conditions, approvals)
-//   4. If ALLOW → execute handler → record SUCCESS in audit
-//   5. If DENY → throw GovernorDeniedError (handler never executes)
-//   6. If REQUIRE_APPROVAL → throw GovernorApprovalRequiredError
+// Every call is governed: classify → evaluate → execute → audit
 await refund({ amount_usd: 75, charge_id: "ch_abc123" });
 ```
 
-### Handling Governance Decisions
+### Error Handling
 
 ```ts
 import { GovernorDeniedError, GovernorApprovalRequiredError } from "@governor/sdk";
@@ -393,348 +336,122 @@ try {
   await refund({ amount_usd: 500, charge_id: "ch_xyz" });
 } catch (error) {
   if (error instanceof GovernorDeniedError) {
-    console.log("Denied:", error.reason);
-    console.log("Risk class:", error.risk_class);
-    console.log("Enforcement mode:", error.enforcement_mode);
-    console.log("Trace:", error.trace);
+    console.log("Denied:", error.reason, "Risk:", error.risk_class);
   } else if (error instanceof GovernorApprovalRequiredError) {
     console.log("Approval needed:", error.approval_request_id);
-    console.log("Risk class:", error.risk_class);
-  } else {
-    throw error;
   }
 }
 ```
 
-### Convenience Wrappers
-
-```ts
-// Governed fetch
-const governedFetch = gov.wrapFetch();
-
-// Governed OpenAI function call
-const searchTool = gov.wrapOpenAITool("web_search", async (args: { query: string }) => {
-  return await searchEngine.search(args.query);
-});
-
-// Governed LangChain tool
-const calcTool = gov.wrapLangChainTool("calculator", async (args: { expression: string }) => {
-  return evaluate(args.expression);
-});
-```
-
-### Telemetry — Run Lifecycle Tracking
+### Provider Adapters (Telemetry)
 
 ```ts
 const run = gov.adapters.openai("run_ticket_001", {
   model: "gpt-4.1-mini",
   task_name: "ticket_triage",
-  tags: ["support", "tier-1"],
 });
 
 await run.start();
-await run.modelCall({ prompt: "Classify this support ticket: ..." });
-await run.modelResult({ input_tokens: 900, output_tokens: 140, cost_usd: 0.01, latency_ms: 740 });
-await run.toolCall({ tool_name: "zendesk", tool_action: "update_ticket" });
-await run.toolResult({ tool_name: "zendesk", tool_action: "update_ticket", status: "SUCCESS", latency_ms: 120 });
+await run.modelCall({ prompt: "Classify this ticket..." });
+await run.modelResult({ input_tokens: 900, output_tokens: 140, cost_usd: 0.01 });
 await run.complete();
 ```
 
-**Available provider adapters:**
+| Adapter | Method |
+|---------|--------|
+| OpenAI | `gov.adapters.openai(runId, opts)` |
+| Anthropic | `gov.adapters.claude(runId, opts)` |
+| Gemini | `gov.adapters.gemini(runId, opts)` |
+| LangChain | `gov.adapters.langchain(runId, opts)` |
 
-| Adapter | Source | Default Provider |
-|---------|--------|-----------------|
-| `gov.adapters.openai(runId, opts)` | `OPENAI` | `openai` |
-| `gov.adapters.claude(runId, opts)` | `ANTHROPIC` | `anthropic` |
-| `gov.adapters.gemini(runId, opts)` | `GEMINI` | `google` |
-| `gov.adapters.langchain(runId, opts)` | `LANGCHAIN` | `langchain` |
+---
 
-## API Reference
+## API Endpoints (Summary)
 
 ### Governance
+- `POST /v1/evaluate` — Evaluate a tool call against policies
+- `POST /v1/evaluate/simulate` — Dry-run evaluation (no side effects)
+- `POST /v1/evaluate/explain` — Human-readable evaluation explanation
 
-#### `POST /v1/evaluate` — Evaluate a tool call against policies
+### Policies (v2 — Versioned)
+- `GET /v1/policies/v2` — List policies
+- `POST /v1/policies/v2` — Create policy
+- `POST /v1/policies/v2/:id/versions` — Create version
+- `POST /v1/policies/v2/versions/:id/publish` — Publish version
+- `POST /v1/policies/v2/versions/:id/rollback-target` — Rollback
+- `GET /v1/policies/v2/versions/:a/diff/:b` — Diff versions
+- `POST /v1/policies/v2/validate` — Validate definition
 
-**Request:**
-```json
-{
-  "org_id": "org_acme",
-  "agent_id": "agent_support_1",
-  "tool_name": "stripe",
-  "tool_action": "refund",
-  "cost_estimate_usd": 75,
-  "environment": "PROD",
-  "metadata": { "customer_tier": "enterprise" }
-}
-```
-
-**Response:**
-```json
-{
-  "request_id": "clxyz123",
-  "decision": "DENY",
-  "reason": "Matched DENY rule: block-high-refunds",
-  "risk_class": "MONEY_MOVEMENT",
-  "enforcement_mode": "PROD",
-  "trace": [
-    { "code": "MODE_CHECK", "message": "Enforcement mode: PROD" },
-    { "code": "SENSITIVE_CHECK", "message": "Action marked sensitive (risk class: MONEY_MOVEMENT, severity: high)" },
-    { "code": "RULE_MATCH", "message": "Matched DENY rule: block-high-refunds" }
-  ],
-  "matched_rule_ids": [],
-  "approval_request_id": null,
-  "warnings": []
-}
-```
-
-#### `POST /v1/evaluate/simulate` — Dry-run evaluation (no side effects)
-
-Same request/response shape as `/v1/evaluate`, but does not create audit events, evaluations, or approval requests.
-
-#### `POST /v1/evaluate/explain` — Human-readable evaluation explanation
-
-Returns a line-by-line textual explanation of the evaluation decision.
-
-### Versioned Policies (v2)
-
-#### `GET /v1/policies/v2` — List versioned policies
-#### `POST /v1/policies/v2` — Create a new policy
-
-```json
-{
-  "org_id": "org_acme",
-  "name": "Finance Controls",
-  "description": "Strict rules for payment processing",
-  "enforcement_mode": "PROD"
-}
-```
-
-#### `POST /v1/policies/v2/:id/versions` — Create a policy version
-
-```json
-{
-  "definition": {
-    "rules": [
-      {
-        "name": "block-high-value",
-        "effect": "DENY",
-        "priority": 10,
-        "subjects": [{ "type": "tool", "value": "stripe.refund" }],
-        "conditions": [{ "field": "cost_estimate_usd", "operator": "greater_than", "value": 500 }],
-        "reason": "Refunds over $500 require manual processing"
-      }
-    ]
-  },
-  "change_summary": "Added $500 refund limit"
-}
-```
-
-The definition is compiled and validated, generating a deterministic checksum.
-
-#### `POST /v1/policies/v2/versions/:versionId/publish` — Publish a version
-#### `POST /v1/policies/v2/versions/:versionId/rollback-target` — Rollback to a version
-#### `GET /v1/policies/v2/versions/:versionId/diff/:otherVersionId` — Compare versions
-
-### Tool Registry
-
-#### `GET /v1/tools` — List registered tools
-#### `POST /v1/tools` — Register or upsert a tool
-
-```json
-{
-  "org_id": "org_acme",
-  "tool_name": "stripe",
-  "tool_action": "refund",
-  "risk_class": "MONEY_MOVEMENT",
-  "is_sensitive": true,
-  "display_name": "Stripe Refund",
-  "description": "Process customer refunds via Stripe API"
-}
-```
-
-#### `POST /v1/tools/classify-risk` — Auto-classify a tool's risk
-
-```json
-{ "tool_name": "stripe", "tool_action": "refund" }
-```
-
-Returns: `{ "risk_class": "MONEY_MOVEMENT", "source": "default_mapping", "confidence": 0.95 }`
-
-#### `GET /v1/tools/risk-classes` — List all risk classes with metadata
-
-### Policy Simulation
-
-#### `POST /v1/simulation/simulate` — Simulate a policy version against a single evaluation
-
-```json
-{
-  "policy_version_id": "pv_abc",
-  "tool_name": "stripe",
-  "tool_action": "refund",
-  "agent_id": "agent_support_1",
-  "risk_class": "MONEY_MOVEMENT",
-  "cost_estimate_usd": 200,
-  "environment": "PROD"
-}
-```
-
-Returns: current decision, simulated decision, and diff.
-
-#### `POST /v1/simulation/simulate-historical` — Simulate against historical evaluations
-
-```json
-{
-  "policy_version_id": "pv_abc",
-  "lookback_hours": 168,
-  "org_id": "org_acme"
-}
-```
-
-Returns: total events, changed decisions, affected agents/tools, sample impacted runs.
-
-### Policy Validation
-
-#### `POST /v1/policies/v2/validate` — Validate a policy definition
-
-Checks for rule conflicts, missing conditions, invalid risk-class references, and duplicate priorities.
-
-### MCP Server Registry
-
-#### `POST /v1/mcp/servers` — Register an MCP server
-#### `GET /v1/mcp/servers` — List MCP servers
-#### `GET /v1/mcp/servers/:id` — Get MCP server details
-#### `PATCH /v1/mcp/servers/:id` — Update an MCP server
-#### `DELETE /v1/mcp/servers/:id` — Remove an MCP server
-#### `GET /v1/mcp/servers/:id/tools` — List tools for an MCP server
-#### `POST /v1/mcp/servers/:id/sync` — Discover and classify tools from an MCP server
-
-### Batch Risk Classification
-
-#### `POST /v1/tools/classify-risk/batch` — Classify risk for multiple tools
-
-```json
-{
-  "tools": [
-    { "tool_name": "stripe", "tool_action": "refund" },
-    { "tool_name": "gmail", "tool_action": "send" }
-  ]
-}
-```
-
-### Legacy Policies (v1)
-
-#### `GET /v1/policies` — List rules, thresholds, budgets, rate limits
-#### `POST /v1/policies/rules` — Create a policy rule
-#### `POST /v1/policies/thresholds` — Create an approval threshold
-#### `POST /v1/policies/budgets` — Create a budget limit
-#### `POST /v1/policies/rate-limits` — Create a rate limit
+### Tools
+- `GET /v1/tools` — List tools
+- `POST /v1/tools` — Register/upsert tool
+- `POST /v1/tools/classify-risk` — Auto-classify risk
+- `POST /v1/tools/classify-risk/batch` — Batch classify
+- `GET /v1/tools/risk-classes` — Risk class reference
 
 ### Approvals
+- `GET /v1/approvals` — List approval requests
+- `POST /v1/approvals/:id/approve` — Approve
+- `POST /v1/approvals/:id/deny` — Deny
+- `POST /v1/approvals/:id/escalate` — Escalate
+- `POST /v1/approvals/bulk` — Bulk actions (up to 100)
 
-#### `GET /v1/approvals` — List approval requests (with agent names, risk class, evidence, actions)
-#### `POST /v1/approvals/:id/approve` — Approve with optional comment
-#### `POST /v1/approvals/:id/deny` — Deny with optional comment
-#### `POST /v1/approvals/:id/escalate` — Escalate to next approval level
-#### `POST /v1/approvals/:id/comment` — Add a comment
-#### `POST /v1/approvals/bulk` — Bulk approve or deny (up to 100 requests)
+### MCP Servers
+- `CRUD /v1/mcp/servers` — Register, list, update, delete MCP servers
+- `POST /v1/mcp/servers/:id/sync` — Discover and classify MCP tools
 
-### Audit
+### Simulation
+- `POST /v1/simulation/simulate` — Single evaluation simulation
+- `POST /v1/simulation/simulate-historical` — Historical blast radius
 
-#### `GET /v1/audit-log` — Query entity-level audit trail
-
-**Query params:** `org_id`, `event_type`, `entity_type`, `entity_id`, `from`, `to`, `search`, `limit`, `offset`
-
-#### `GET /v1/audit/events` — Query governance decision audit trail
-#### `GET /v1/audit-log/verify?org_id=xxx` — Verify audit chain integrity
-
-Returns: `{ valid: true, total_entries: 150, verified_entries: 150 }` or details of the first broken link.
-
-### Webhooks
-
-#### `GET /v1/webhooks` — List webhooks
-#### `POST /v1/webhooks` — Create a webhook
-#### `PATCH /v1/webhooks/:id` — Update a webhook
-#### `POST /v1/webhooks/:id/test` — Send a test delivery
+### Audit & Telemetry
+- `GET /v1/audit-log` — Entity-level audit trail
+- `GET /v1/audit/events` — Governance decision records
+- `GET /v1/audit-log/verify` — Hash chain integrity check
+- `POST /v1/ingest/events` — Ingest run + events
+- `GET /v1/runs` / `GET /v1/runs/:id` — Run explorer
 
 ### Metrics
+- `GET /v1/metrics/overview` — Dashboard KPIs
+- `GET /v1/metrics/risk-classes` — By risk class
+- `GET /v1/metrics/costs` — Cost breakdown
+- `GET /v1/metrics/governance` — Blocked actions, spend prevented, trends
+- `GET /v1/metrics/tools` — Per-tool metrics
 
-#### `GET /v1/metrics/overview` — Dashboard KPIs
-#### `GET /v1/metrics/risk-classes` — Evaluations by risk class
-#### `GET /v1/metrics/costs` — Cost breakdown (governed, blocked, run costs)
-#### `GET /v1/metrics/approvals` — Approval statistics
-#### `GET /v1/metrics/tenants` — Organization-level metrics
-#### `GET /v1/metrics/agents` — Agent list with metrics
-#### `GET /v1/metrics/provider-breakdown` — Usage by provider
-#### `GET /v1/metrics/governance` — Governance analytics (blocked actions, spend prevented, daily trends)
-#### `GET /v1/metrics/tools` — Per-tool metrics (evaluations, denials, cost, block rate)
+### Other
+- `GET /v1/webhooks` / `POST /v1/webhooks` — Webhook management
+- `GET /v1/events/stream` — SSE real-time stream
+- `GET /health` — Health check
+- `GET /ready` — Readiness check (DB connectivity)
 
-### Telemetry
+---
 
-#### `POST /v1/ingest/events` — Ingest a run with events
-#### `GET /v1/runs` — List runs
-#### `GET /v1/runs/:runId` — Get run with events
+## Risk Classification
 
-### Real-time
+| Risk Class | Severity | Examples |
+|------------|----------|---------|
+| `MONEY_MOVEMENT` | Critical (95) | `stripe.refund`, `paypal.transfer` |
+| `CODE_EXECUTION` | Critical (90) | `shell.exec`, `docker.run` |
+| `ADMIN_ACTION` | Critical (90) | `iam.grant`, `k8s.deploy` |
+| `CREDENTIAL_USE` | Critical (85) | `vault.read`, `aws.assume_role` |
+| `PII_ACCESS` | High (85) | `customer.lookup`, `user.get_pii` |
+| `EXTERNAL_COMMUNICATION` | High (80) | `gmail.send`, `twilio.sms` |
+| `DATA_EXPORT` | High (75) | `s3.export`, `bigquery.export` |
+| `FILE_MUTATION` | Medium (75) | `fs.delete`, `s3.delete` |
+| `DATA_WRITE` | Medium (60) | `postgres.update`, `mongo.insert` |
+| `LOW_RISK` | Low (10) | `http.GET`, `cache.read` |
 
-#### `GET /v1/events/stream` — Server-Sent Events stream
+---
 
-## Console Features
-
-| Page | Path | Description |
-|------|------|-------------|
-| **Overview** | `/overview` | KPI cards, risk class distribution, cost metrics, 7-day trajectory, decision breakdown |
-| **Live Timeline** | `/timeline` | Real-time SSE event stream with type filtering |
-| **Approvals** | `/approvals` | Inbox with risk badges, agent names, approve/deny/escalate/comment, evidence, SLA countdown |
-| **Policy Studio** | `/policy-studio` | Versioned policy management (create/publish/rollback/diff), legacy rules/thresholds/budgets/rate limits, simulator |
-| **Run Explorer** | `/runs` | Filterable table of all runs with status, provider, cost display |
-| **Run Detail** | `/runs/:runId` | Event timeline, cost events, analysis panel |
-| **Tool Registry** | `/tools` | Register tools, auto-classify risk, batch classify, risk class reference |
-| **MCP Servers** | `/mcp` | MCP server registry, tool discovery, auto-classification, sync |
-| **Audit Explorer** | `/audit` | Entity-level audit log with search, type filtering, expandable payloads |
-| **Agents** | `/agents` | Register agents with framework/environment/provider, view stats |
-| **Agent Detail** | `/agents/:agentId` | Agent KPIs, linked policies, allowed tools, recent runs |
-| **Tenants** | `/tenants` | Org-level metrics |
-| **Integrations** | `/integrations` | API keys and framework detection |
-| **Governance Dashboard** | via `/overview` | Blocked actions, approval rates, spend prevented, risk distribution |
-
-## Data Model
-
-### Core Entities
+## Policy Evaluation Pipeline
 
 ```
-Organization ─┬── Agent (framework, environment, provider)
-              ├── Tool (risk class, sensitivity)
-              ├── Policy ── PolicyVersion (definition, checksum, published)
-              ├── PolicyRule (ALLOW/DENY + priority + conditions + risk class)
-              ├── ApprovalThreshold (cost-based triggers)
-              ├── ApprovalPolicy (risk-class triggers, auto-expiry)
-              ├── BudgetLimit / Budget v2 (daily/weekly/monthly spend caps)
-              ├── RateLimitPolicy / RateLimit v2 (calls per window)
-              ├── AuditEvent (governance decision records)
-              ├── AuditLog (entity-level audit trail)
-              ├── Evaluation (enriched governance evaluation records)
-              ├── ApprovalRequest ── ApprovalAction (approve/deny/escalate/comment)
-              ├── Webhook (event-driven notifications)
-              └── AgentRun ── AgentEvent (step-level telemetry)
+Tool call → Risk Classify → Sensitivity Check → Budget Check
+  → Rate Limit → Explicit DENY Rules → Approval Check
+  → Allow Rules → Default Decision (mode-dependent)
 ```
 
-## Development
-
-### Make Commands
-
-| Command | Description |
-|---------|-------------|
-| `make bootstrap` | Full initialization (install, infra, db, seed, test) |
-| `make dev` | Start API (port 4000) + Console (port 3000) in watch mode |
-| `make install` | `pnpm install --frozen-lockfile` |
-| `make infra` | Start Postgres + Redis containers |
-| `make db-create` | Create the `governor` database |
-| `make prisma-generate` | Generate Prisma client |
-| `make prisma-migrate` | Run database migrations |
-| `make seed` | Populate demo seed data |
-| `make test` | Build and run all tests |
-| `make down` | Stop Docker containers |
-| `make logs` | Follow Docker container logs |
+Every evaluation returns a **decision trace** showing each step the engine considered.
 
 ### Enforcement Modes
 
@@ -742,23 +459,25 @@ Organization ─┬── Agent (framework, environment, provider)
 |------|-------------------|---------------|----------------------|
 | `DEV` | Allow + warn | Allow | `true` for sensitive |
 | `STAGING` | Allow + warn | Allow | `true` for sensitive |
-| `PROD` | Deny (unless explicit ALLOW rule) | Default allow | N/A |
+| `PROD` | Deny (unless explicit ALLOW) | Default allow | N/A |
 
-Sensitive risk classes: `MONEY_MOVEMENT`, `DATA_EXPORT`, `CODE_EXECUTION`, `FILE_MUTATION`, `ADMIN_ACTION`, `CREDENTIAL_USE`, `PII_ACCESS`, `EXTERNAL_COMMUNICATION`.
+---
 
-### Examples
+## Development
 
-Working integration examples in `examples/`:
+### Make Commands
 
-```bash
-# Run any example (requires Governor API running locally)
-npx tsx examples/openai-agent/index.ts     # OpenAI function-calling
-npx tsx examples/langchain-agent/index.ts  # LangChain tools
-npx tsx examples/mcp-server/index.ts       # MCP server governance
-npx tsx examples/internal-tool/index.ts    # Internal pipeline + telemetry
-```
-
-See [examples/README.md](./examples/README.md) for full documentation.
+| Command | Description |
+|---------|-------------|
+| `make bootstrap` | Full init (install, infra, db, seed, test) |
+| `make dev` | Start API (:4000) + Console (:3000) |
+| `make install` | `pnpm install --frozen-lockfile` |
+| `make infra` | Start Postgres + Redis containers |
+| `make prisma-generate` | Generate Prisma client |
+| `make prisma-migrate` | Run database migrations |
+| `make seed` | Populate demo seed data |
+| `make test` | Build and run all tests |
+| `make down` | Stop Docker containers |
 
 ### Testing
 
@@ -768,53 +487,72 @@ pnpm --filter @governor/policy-engine test
 
 # API integration tests
 pnpm --filter @governor/api test
-
-# Full workspace (build + test)
-pnpm build && pnpm test
 ```
 
-### Docker Compose Services
+### Docker Compose (Local Dev)
 
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| `postgres` | `postgres:16-alpine` | 5432 | Primary database |
-| `redis` | `redis:7-alpine` | 6379 | Rate limits, SSE pub/sub, spend cache |
-| `api` | Custom Dockerfile | 4000 | Fastify API service |
-| `console` | Custom Dockerfile | 3000 | Next.js frontend |
+| Service | Image | Port |
+|---------|-------|------|
+| `postgres` | `postgres:16-alpine` | 5432 |
+| `redis` | `redis:7-alpine` | 6379 |
+
+---
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| `REDIS_URL` missing or env parse errors | Ensure `.env` exists (`make ensure-env`) and start dev with `make dev` |
-| Clerk key errors in local dev | Placeholder keys run local-mode UI. Use real Clerk keys for full auth |
-| `EADDRINUSE` on port 3000/4000 | Stop previous processes, then rerun `make dev` |
-| Next.js stale cache issues | Stop dev server, remove `apps/console/.next`, restart |
+| "Supabase client unavailable" on sign-in | Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` on Vercel console project |
+| CORS errors from console → API | Set `CORS_ORIGIN` on API Vercel project to your console URL |
+| Empty dashboard pages | Database needs seed data — run `make seed` locally or use the SDK to send real data |
+| `REDIS_URL` missing warnings | Redis is optional — rate limits and SSE degrade gracefully without it |
 | Prisma client not generated | Run `make prisma-generate` or `pnpm db:generate` |
-| Database connection refused | Ensure Docker is running and `make infra` has completed |
+| Next.js stale cache | Delete `apps/console/.next` and restart |
+| Vercel build TS errors | Vercel uses stricter TypeScript — ensure all types are explicit |
+
+---
 
 ## Roadmap
 
-### Completed
-- Enforcement consistency (DEV/STAGING/PROD with sensitive action handling).
-- Policy simulation engine (single + historical blast radius).
-- Policy version lifecycle (validation, conflict detection, structured diff).
-- MCP server governance (registry, tool discovery, auto-classification).
-- Advanced approval workflows (chains, escalation, bulk actions).
-- Batch risk classification.
-- Operator analytics (governance metrics, per-tool analytics).
-- Audit hash chaining + integrity verification.
-- Integration examples (OpenAI, LangChain, MCP, internal tools).
+### Completed ✅
+- Full Supabase authentication (email/password sign-up, sign-in, session management)
+- Middleware auth guard (unauthenticated redirect to /sign-in)
+- Vercel deployment (API + Console as separate projects)
+- Clerk removal — fully migrated to Supabase-only auth
+- Next.js 15.2.6 (patched CVE-2025-29927 + CVE-2025-66478)
+- Policy engine with conditions DSL, versioning, compile, diff
+- Policy simulation (single + historical blast radius)
+- MCP server governance (registry, tool discovery, auto-classification)
+- Advanced approval workflows (chains, escalation, bulk actions)
+- AI Action Firewall with zero-config risk classification
+- Audit hash chaining + integrity verification
+- SDK with `protectAgent()`, `wrapTool()`, provider adapters
+- CLI with init, inspect, simulate, actions, rules
+- 22 API modules with full CRUD
+- Console with 20+ pages
 
-### Next: Enterprise Depth
-- Policy pack marketplace (installable rule + risk mapping bundles).
-- Model-backed analyst copilot (RAG over run/event/policy data).
-- SSO/SCIM + stronger Clerk org role mapping.
-- Data retention controls, PII tagging/redaction pipeline.
-- Multi-region deployment blueprint.
+### Next Up 🚧
+- **Production seed data** — populate dashboard with realistic demo data on Vercel
+- **Redis integration** — connect a hosted Redis instance for rate limits, SSE, budget caching
+- **Password reset flow** — "Forgot Password" UI + Supabase reset email
+- **Email verification redirect** — configure Supabase to redirect to console after email confirmation
+- **Organization management UI** — create/switch orgs, invite team members
+- **Marketing landing page** — public homepage with product overview
+- **Webhook delivery worker** — background job runner for outbound webhook delivery
+- **API key management UX** — full create/revoke/rotate flow in Settings
 
-### Future: Platform Integrations
-- Slack/PagerDuty/Jira connectors for approvals and incidents.
-- Data warehouse export (Snowflake/BigQuery) for FinOps and compliance.
-- Team-based saved views and alert subscriptions.
-- Provider-native middleware for OpenAI, Anthropic, Gemini, LangChain callbacks.
+### Future 🔮
+- **Billing integration** — Stripe for paid plans (usage-based pricing)
+- **SSO / SAML** — Enterprise authentication
+- **Slack / PagerDuty / Jira** — Approval and incident connectors
+- **Data warehouse export** — Snowflake/BigQuery for FinOps and compliance
+- **Model-backed analyst copilot** — RAG over governance data
+- **Policy pack marketplace** — installable rule + risk mapping bundles
+- **Multi-region deployment** — geographic distribution blueprint
+- **Provider-native middleware** — OpenAI, Anthropic, Gemini callbacks
+
+---
+
+## License
+
+MIT
