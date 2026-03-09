@@ -227,25 +227,27 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
     const classified: { tool_name: string; risk_class: string; confidence: number }[] = [];
 
     for (const tool of payload.tools) {
-      const classification = classifyToolRisk(server.name, tool.name);
+      const toolName = tool.name as string;
+      const toolDescription = tool.description as string | undefined;
+      const classification = classifyToolRisk(server.name, toolName);
       const riskClass = (tool.risk_class as RiskClass) ?? classification.riskClass;
       const sensitive = isSensitiveRiskClass(riskClass);
 
       classified.push({
-        tool_name: tool.name,
+        tool_name: toolName,
         risk_class: riskClass,
         confidence: tool.risk_class ? 1.0 : classification.confidence,
       });
 
       const existing = await app.prisma.mCPTool.findUnique({
-        where: { serverId_toolName: { serverId: id, toolName: tool.name } },
+        where: { serverId_toolName: { serverId: id, toolName } },
       });
 
       if (existing) {
         await app.prisma.mCPTool.update({
           where: { id: existing.id },
           data: {
-            description: tool.description ?? existing.description,
+            description: toolDescription ?? existing.description,
             inputSchema: tool.input_schema as any ?? existing.inputSchema,
             riskClass,
             isSensitive: sensitive,
@@ -256,8 +258,8 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
         await app.prisma.mCPTool.create({
           data: {
             serverId: id,
-            toolName: tool.name,
-            description: tool.description,
+            toolName,
+            description: toolDescription,
             inputSchema: tool.input_schema as any,
             riskClass,
             isSensitive: sensitive,
@@ -269,20 +271,20 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
       // Also register in the main Tool registry for policy evaluation
       await app.prisma.tool.upsert({
         where: {
-          orgId_toolName_toolAction: { orgId, toolName: server.name, toolAction: tool.name },
+          orgId_toolName_toolAction: { orgId, toolName: server.name, toolAction: toolName },
         },
         create: {
           orgId,
           toolName: server.name,
-          toolAction: tool.name,
-          displayName: `${server.name} / ${tool.name}`,
-          description: tool.description,
+          toolAction: toolName,
+          displayName: `${server.name} / ${toolName}`,
+          description: toolDescription,
           riskClass,
           isSensitive: sensitive,
           metadata: { mcp_server_id: id } as any,
         },
         update: {
-          description: tool.description,
+          description: toolDescription,
           riskClass,
           isSensitive: sensitive,
         },
