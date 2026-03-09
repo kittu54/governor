@@ -32,7 +32,7 @@ export const simulationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/simulate", async (request, reply) => {
     const payload = simulateSingleSchema.parse(request.body);
-    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
+    const orgId = resolveRequestOrg(request, { fromBody: String(payload.org_id) });
     const result = await service.simulateSingle({
       ...payload,
       org_id: orgId,
@@ -44,7 +44,7 @@ export const simulationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/simulate-historical", async (request, reply) => {
     const payload = simulateHistoricalSchema.parse(request.body);
-    const orgId = resolveRequestOrg(request, { fromBody: payload.org_id });
+    const orgId = resolveRequestOrg(request, { fromBody: String(payload.org_id) });
     const result = await service.simulateHistorical({
       ...payload,
       org_id: orgId,
