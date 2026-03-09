@@ -1,0 +1,11 @@
+{
+    "version": 2,
+    "installCommand": "cd ../.. && corepack pnpm install --filter @governor/api",
+    "buildCommand": "cd ../.. && corepack pnpm --filter @governor/api build",
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "/src/app.ts"
+        }
+    ]
+}
