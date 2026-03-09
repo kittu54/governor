@@ -1,4 +1,4 @@
-import { isClerkEnabled, isSupabaseEnabled } from "./clerk";
+import { isSupabaseEnabled } from "./clerk";
 
 export const API_BASE_URL = (() => {
   const explicit = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
@@ -8,20 +8,6 @@ export const API_BASE_URL = (() => {
 })();
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  if (isClerkEnabled) {
-    try {
-      const { auth } = await import("@clerk/nextjs/server");
-      const { getToken } = await auth();
-      const token = await getToken();
-      const headers: Record<string, string> = {};
-      if (token) headers.authorization = `Bearer ${token}`;
-      return headers;
-    } catch (error) {
-      console.warn("[console] Clerk auth header resolution failed", error);
-      return {};
-    }
-  }
-
   if (isSupabaseEnabled) {
     try {
       const { getSupabaseServerClient } = await import("./supabase-server");
