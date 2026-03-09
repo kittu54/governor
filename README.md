@@ -552,7 +552,3 @@ pnpm --filter @governor/api test
 - **Provider-native middleware** — OpenAI, Anthropic, Gemini callbacks
 
 ---
-
-## License
-
-MIT
