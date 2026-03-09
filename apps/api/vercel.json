@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "installCommand": "cd ../.. && corepack pnpm install --filter ...@governor/api",
+    "installCommand": "cd ../.. && corepack pnpm install --filter @governor/api --filter @governor/shared --filter @governor/policy-engine",
     "buildCommand": "cd ../.. && corepack pnpm --filter @governor/api exec prisma generate && corepack pnpm --filter @governor/shared build && corepack pnpm --filter @governor/policy-engine build && corepack pnpm --filter @governor/api build",
     "routes": [
         {
